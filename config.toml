@@ -1,5 +1,11 @@
 # config.toml
 
+[board]
+# parameters defining the game board
+width = 16
+height = 24
+
+
 [paths]
 #paths are relative to executable directory
 output_directory = "frames"

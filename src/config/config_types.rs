@@ -5,6 +5,12 @@
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
+pub struct BoardConfig {
+    pub width: u32,
+    pub height: u32,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct RenderConfig {
     pub texture_width: u32,
     pub texture_height: u32,
