@@ -2,16 +2,17 @@
 
 use nannou::prelude::*;
 use std::time::Instant;
-use tacit_gameover::config::*;
-
+use tacit_gameover::{config::*, views::BackgroundManager};
 struct Model {
+    // Background
+    background: BackgroundManager,
+
     // Nannou API
     draw: nannou::Draw,
     draw_renderer: nannou::draw::Renderer,
 
     texture: wgpu::Texture,
     texture_reshaper: wgpu::TextureReshaper,
-
     // FPS
     last_update: Instant,
     fps: f32,
@@ -80,6 +81,8 @@ fn model(app: &App) -> Model {
     );
 
     Model {
+        background: BackgroundManager::default(),
+
         draw,
         draw_renderer,
         texture,
@@ -101,6 +104,23 @@ fn main() {
 }
 
 fn update(app: &App, model: &mut Model, _update: Update) {
+    let now = Instant::now();
+    let duration = now - model.last_update;
+    let dt = duration.as_secs_f32();
+    model.last_update = now;
+
+    // FPS calculations
+    if model.verbose {
+        calculate_fps(app, model, dt);
+    }
+
+    // Handle the background
+    model.background.draw(&model.draw, app.time);
+
+    // Handle FPS and origin display
+    if model.verbose {
+        draw_fps(model);
+    }
     // Render to texture and handle frame recording
     render_and_capture(app, model);
 }
@@ -114,9 +134,17 @@ fn view(_app: &App, model: &Model, frame: Frame) {
         .encode_render_pass(frame.texture_view(), &mut encoder);
 }
 
-fn key_pressed(_app: &App, _model: &mut Model, _key: Key) {
-    todo!();
+fn key_pressed(app: &App, model: &mut Model, key: Key) {
+    match key {
+        Key::P => {
+            model.verbose = !model.verbose;
+            init_fps(app, model);
+        }
+        _ => {}
+    }
 }
+
+// ******************************* Rendering and Capture *****************************
 
 fn render_and_capture(app: &App, model: &mut Model) {
     let window = app.main_window();
@@ -136,4 +164,56 @@ fn render_and_capture(app: &App, model: &mut Model) {
         &texture_view,
         None,
     );
+
+    window.queue().submit(Some(encoder.finish()));
+    device.poll(wgpu::Maintain::Wait);
+}
+
+// ************************ FPS and debug display  *************************************
+
+fn draw_fps(model: &Model) {
+    let draw = &model.draw;
+    // Draw (+,+) axes
+    draw.line()
+        .points(pt2(0.0, 0.0), pt2(50.0, 0.0))
+        .color(RED)
+        .stroke_weight(1.0);
+    draw.line()
+        .points(pt2(0.0, 0.0), pt2(0.0, 50.0))
+        .color(BLUE)
+        .stroke_weight(1.0);
+
+    // Visualize FPS (Optional)
+    draw.text(&format!("FPS: {:.1}", model.fps))
+        .x_y(900.0, 520.0)
+        .color(RED)
+        .font_size(20);
+}
+
+fn init_fps(app: &App, model: &mut Model) {
+    model.fps = 0.0;
+    model.frame_count = 0;
+    model.frame_time_accumulator = 0.0;
+    model.last_fps_display_update = app.time;
+}
+
+fn calculate_fps(app: &App, model: &mut Model, dt: f32) {
+    model.frame_count += 1;
+    model.frame_time_accumulator += dt;
+    let elapsed_since_last_fps_update = app.time - model.last_fps_display_update;
+    if elapsed_since_last_fps_update >= model.fps_update_interval {
+        if model.frame_count > 0 {
+            let avg_frame_time = model.frame_time_accumulator / model.frame_count as f32;
+            model.fps = if avg_frame_time > 0.0 {
+                1.0 / avg_frame_time
+            } else {
+                0.0
+            };
+        }
+
+        // Reset accumulators
+        model.frame_count = 0;
+        model.frame_time_accumulator = 0.0;
+        model.last_fps_display_update = app.time;
+    }
 }
