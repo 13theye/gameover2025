@@ -32,7 +32,7 @@ impl PieceInstance {
         }
     }
 
-    fn rotate(&self, direction: RotationDirection) -> &Vec<(i8, i8)> {
+    fn rotate(&self, direction: RotationDirection) -> &[(i8, i8); 4] {
         let count = self.piece.rotations.len();
 
         let inx = match direction {
