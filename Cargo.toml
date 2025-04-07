@@ -1,0 +1,19 @@
+[package]
+name = "tacit-gameover"
+authors = ["13th Eye <jjhh@13theye.com>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nannou = "0.19"
+nannou_osc = "0.19.0"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+
+[lib]
+name = "tacit_gameover"
+path = "src/lib.rs"
+
+[[bin]]
+name = "tacit-gameover"
+path = "src/main.rs"
