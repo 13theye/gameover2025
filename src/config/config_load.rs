@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    pub board: BoardConfig,
     pub paths: PathConfig,
     pub rendering: RenderConfig,
     pub window: WindowConfig,

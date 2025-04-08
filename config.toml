@@ -1,10 +1,12 @@
 # config.toml
 
 [board]
-# parameters defining the game board
+# parameters defining the game board.
+# width and height in grid blocks (integer)
 width = 16
 height = 24
-
+# grid block size in screen pts (float)
+cell_size = 20.0
 
 [paths]
 #paths are relative to executable directory

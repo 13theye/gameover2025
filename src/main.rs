@@ -1,9 +1,17 @@
 // src/main.rs
 
 use nannou::prelude::*;
-use std::time::Instant;
-use tacit_gameover::{config::*, views::BackgroundManager};
+use std::{collections::HashMap, time::Instant};
+use tacit_gameover::{
+    config::*,
+    views::{BackgroundManager, BoardInstance},
+};
+
 struct Model {
+    // Tetris Boards
+    boards: HashMap<String, BoardInstance>,
+    board_config: BoardConfig,
+
     // Background
     background: BackgroundManager,
 
@@ -13,11 +21,12 @@ struct Model {
 
     texture: wgpu::Texture,
     texture_reshaper: wgpu::TextureReshaper,
+
     // FPS
     last_update: Instant,
     fps: f32,
     fps_update_interval: f32,
-    frame_count: u32,
+    frame_count: usize,
     last_fps_display_update: f32,
     frame_time_accumulator: f32,
 
@@ -27,7 +36,7 @@ struct Model {
 
 fn model(app: &App) -> Model {
     // Load config
-    let config = Config::load().expect("Failed to load config file.");
+    let config = Config::load().expect("\nGameOver: FAILED TO LOAD CONFIG.TOML\n");
 
     // Create window
     let window_id = app
@@ -81,6 +90,9 @@ fn model(app: &App) -> Model {
     );
 
     Model {
+        boards: HashMap::new(),
+        board_config: config.board,
+
         background: BackgroundManager::default(),
 
         draw,
@@ -96,6 +108,19 @@ fn model(app: &App) -> Model {
         frame_time_accumulator: 0.0,
 
         verbose: false,
+    }
+}
+
+impl Model {
+    fn make_board(&mut self, id: &str, location: Vec2) {
+        let config = &self.board_config;
+        let board = BoardInstance::new(id, location, config.width, config.height, config.cell_size);
+        self.boards.insert(board.id.to_owned(), board);
+        println!("\n<------ Board Created: <{}> ----->", id);
+        println!(
+            "size: {}x{} blocks\nlocation: {}\n",
+            config.width, config.height, location
+        );
     }
 }
 
@@ -117,6 +142,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Handle the background
     model.background.draw(&model.draw, app.time);
 
+    // Draw the boards
+    for board in model.boards.values() {
+        board.draw(&model.draw);
+    }
+
     // Handle FPS and origin display
     if model.verbose {
         draw_fps(model);
@@ -134,8 +164,13 @@ fn view(_app: &App, model: &Model, frame: Frame) {
         .encode_render_pass(frame.texture_view(), &mut encoder);
 }
 
+// ******************************* Key Capture *****************************
+
 fn key_pressed(app: &App, model: &mut Model, key: Key) {
     match key {
+        Key::G => {
+            model.make_board("board", vec2(0.0, 0.0));
+        }
         Key::P => {
             model.verbose = !model.verbose;
             init_fps(app, model);

@@ -6,8 +6,9 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub struct BoardConfig {
-    pub width: u32,
-    pub height: u32,
+    pub width: usize,
+    pub height: usize,
+    pub cell_size: f32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -27,7 +28,7 @@ pub struct WindowConfig {
 #[derive(Debug, Deserialize)]
 pub struct FrameRecorderConfig {
     pub frame_limit: u32,
-    pub fps: u64,
+    pub fps: u32,
 }
 
 #[derive(Debug, Deserialize)]

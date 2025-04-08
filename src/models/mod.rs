@@ -3,4 +3,5 @@
 pub mod board;
 pub mod piece;
 
-pub use piece::{Piece, PieceType};
+pub use board::Board;
+pub use piece::PieceType;
