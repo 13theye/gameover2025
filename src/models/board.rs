@@ -14,7 +14,8 @@ pub enum PlaceResult {
 pub struct Board {
     pub width: isize,  // the overall width in cells
     pub height: isize, // the overall height in cells
-    state: BoardState,
+    state: BoardState, // the game state
+    commit: bool,      // true when all pieces are locked
 }
 
 impl Board {
@@ -23,10 +24,28 @@ impl Board {
             width: width as isize,
             height: height as isize,
             state: BoardState::new(width, height),
+            commit: true,
         }
     }
 
     /************************ Piece Placement *******************************/
+
+    pub fn drop_piece(&mut self, piece: &PieceInstance, pos_x: isize, pos_y: isize) -> PlaceResult {
+        let (min, max) = piece.typ.minmax_x(piece.rot_idx);
+        let board_min = pos_x + min;
+        let board_max = pos_x + max;
+        let skirt = piece.typ.skirt(piece.rot_idx);
+
+        let mut max_height = isize::MIN;
+        for x in board_min..=board_max {
+            // CAUTION: assumes the piece is in a legal position
+            if skirt[x as usize] > max_height {
+                max_height = skirt[x as usize];
+            }
+        }
+
+        self.try_place(piece, pos_x, max_height)
+    }
 
     // Sees if the next placement is valid
     pub fn try_place(&mut self, piece: &PieceInstance, pos_x: isize, pos_y: isize) -> PlaceResult {
@@ -76,6 +95,33 @@ impl Board {
     }
 
     /************************ Utility functions *******************************/
+
+    // row-ordered 2D to 1D indexing
+    #[inline]
+    fn idx(&self, x: isize, y: isize) -> Option<usize> {
+        // Check bounds first (including negative values)
+        if x < 0 || y < 0 || x >= self.width || y >= self.height {
+            println!("Warning: out-of-bounds x: {}, y: {}", x, y);
+            return None;
+        }
+        // Safe to convert to usize now
+        Some((y * self.width + x) as usize)
+    }
+
+    fn de_idx(&self, index: usize) -> Option<(isize, isize)> {
+        if index >= self.state.grid.len() {
+            return None;
+        }
+        let y = index as isize / self.width;
+        let x = index as isize % self.width;
+        Some((x, y))
+    }
+
+    fn mid_x(&self) -> isize {
+        // note: in Rust, this always rounds down
+        self.width / 2
+    }
+
     fn row_score(&self, row: isize) -> Option<isize> {
         if row >= self.height {
             println!("Warning: out-of-bounds y: {}", row);
@@ -90,32 +136,6 @@ impl Board {
             return None;
         }
         Some(self.state.col_score[col as usize])
-    }
-
-    #[inline]
-    // row-ordered 2D to 1D indexing
-    fn idx(&self, x: isize, y: isize) -> Option<usize> {
-        // Check bounds first (including negative values)
-        if x < 0 || y < 0 || x >= self.width || y >= self.height {
-            println!("Warning: out-of-bounds x: {}, y: {}", x, y);
-            return None;
-        }
-        // Safe to convert to usize now
-        Some((y * self.width + x) as usize)
-    }
-
-    #[inline]
-    fn de_idx(&self, index: usize) -> Option<(isize, isize)> {
-        if index >= self.state.grid.len() {
-            return None;
-        }
-        let y = index as isize / self.width;
-        let x = index as isize % self.width;
-        Some((x, y))
-    }
-    fn mid_x(&self) -> isize {
-        // note: in Rust, this always rounds down
-        self.width / 2
     }
 }
 

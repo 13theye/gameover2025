@@ -20,7 +20,7 @@ pub enum PieceType {
 }
 
 impl PieceType {
-    pub const fn get_rotations(&self) -> &'static [[Block; 4]; 4] {
+    pub const fn rotations(&self) -> &'static [[Block; 4]; 4] {
         match self {
             PieceType::I => &I_ROTATIONS,
             PieceType::J => &J_ROTATIONS,
@@ -32,67 +32,46 @@ impl PieceType {
         }
     }
 
-    /******************* Piece Sizing Methods ********************/
+    // returns a vec where each index is an x-coordinate
+    // and value is the lowest y-value for that x-coordinate
+    pub fn skirt(&self, rot_idx: usize) -> Vec<isize> {
+        let piece = self.get_rotation(rot_idx);
 
-    pub const fn y_min(&self, rotation_index: usize) -> isize {
-        let rotation = self.get_rotation(rotation_index);
+        // Find min/max x to determine skirt width
+        let min_x = piece.iter().map(|&(x, _)| x).min().unwrap();
+        let max_x = piece.iter().map(|&(x, _)| x).max().unwrap();
 
-        // Initialize with the first block's y-coordinate
-        let mut lowest = isize::MAX;
+        // Initialize skirt with maximum possible y-values
+        let width = (max_x - min_x + 1) as usize;
+        let mut skirt = vec![isize::MAX; width];
 
-        // Manual iteration for const context
-        let mut i = 0;
-        while i < self.rotation_count() {
-            if rotation[i].1 < lowest {
-                lowest = rotation[i].1;
+        // Calculate lowest y for each x
+        for &(x, y) in piece {
+            let index = (x - min_x) as usize;
+            if y < skirt[index] {
+                skirt[index] = y;
             }
-            i += 1;
         }
-        lowest
+
+        skirt
     }
 
-    pub const fn x_min(&self, rotation_index: usize) -> isize {
-        let rotation = self.get_rotation(rotation_index);
-
-        // Initialize with the first block's y-coordinate
-        let mut min = isize::MAX;
-
-        // Manual iteration for const context
-        let mut i = 0;
-        while i < self.rotation_count() {
-            if rotation[i].0 < min {
-                min = rotation[i].0;
-            }
-            i += 1;
-        }
-        min
+    pub fn minmax_x(&self, rot_idx: usize) -> (isize, isize) {
+        let piece = self.get_rotation(rot_idx);
+        (
+            piece.iter().map(|&(x, _)| x).min().unwrap(),
+            piece.iter().map(|&(x, _)| x).max().unwrap(),
+        )
     }
 
-    pub const fn x_max(&self, rotation_index: usize) -> isize {
-        let rotation = self.get_rotation(rotation_index);
+    /******************* Utility Methods ******************/
 
-        // Initialize with the first block's y-coordinate
-        let mut max = isize::MIN;
-
-        // Manual iteration for const context
-        let mut i = 0;
-        while i < self.rotation_count() {
-            if rotation[i].0 < max {
-                max = rotation[i].0;
-            }
-            i += 1;
-        }
-        max
-    }
-
-    /******************* Piece Rotation Methods ******************/
-
-    pub const fn get_rotation(&self, rotation_index: usize) -> &'static [Block; 4] {
-        &self.get_rotations()[rotation_index % self.rotation_count()]
+    pub const fn get_rotation(&self, rot_idx: usize) -> &'static [Block; 4] {
+        &self.rotations()[rot_idx % self.rotation_count()]
     }
 
     pub const fn rotation_count(&self) -> usize {
-        self.get_rotations().len()
+        self.rotations().len()
     }
 }
 
