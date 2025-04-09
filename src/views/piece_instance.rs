@@ -52,4 +52,37 @@ impl PieceInstance {
         self.rot_idx = inx;
         self.typ.get_rotation(inx)
     }
+
+    /***************** Coordinate Translation Methods ******************** */
+
+    // Get the absolute board positions for all cells
+    pub fn board_positions(&self) -> Vec<BoardPosition> {
+        self.cells()
+            .iter()
+            .map(|&(dx, dy)| BoardPosition {
+                x: self.position.x + dx,
+                y: self.position.y + dy,
+            })
+            .collect()
+    }
+
+    // Get the board position for a specific cell
+    pub fn board_cell_position(&self, cell_idx: usize) -> BoardPosition {
+        let (dx, dy) = self.cells()[cell_idx];
+        BoardPosition {
+            x: self.position.x + dx,
+            y: self.position.y + dy,
+        }
+    }
+
+    // Get a hypothetical position if this piece were at a different position
+    pub fn board_test_positions(&self, test_pos: BoardPosition) -> Vec<BoardPosition> {
+        self.cells()
+            .iter()
+            .map(|&(dx, dy)| BoardPosition {
+                x: test_pos.x + dx,
+                y: test_pos.y + dy,
+            })
+            .collect()
+    }
 }

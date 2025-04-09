@@ -32,14 +32,13 @@ impl PieceType {
         }
     }
 
-    // returns a vec where each index is an x-coordinate
+    // returns a vec where each index is a dx relative to min_x
     // and value is the lowest y-value for that x-coordinate
     pub fn skirt(&self, rot_idx: usize) -> Vec<isize> {
         let piece = self.get_rotation(rot_idx);
 
         // Find min/max x to determine skirt width
-        let min_x = piece.iter().map(|&(x, _)| x).min().unwrap();
-        let max_x = piece.iter().map(|&(x, _)| x).max().unwrap();
+        let (min_x, max_x) = self.minmax_x(rot_idx);
 
         // Initialize skirt with maximum possible y-values
         let width = (max_x - min_x + 1) as usize;
@@ -56,6 +55,7 @@ impl PieceType {
         skirt
     }
 
+    // returns the minimum and maximum x offsets
     pub fn minmax_x(&self, rot_idx: usize) -> (isize, isize) {
         let piece = self.get_rotation(rot_idx);
         (
@@ -64,6 +64,7 @@ impl PieceType {
         )
     }
 
+    // returns the highest y offset
     pub fn max_y(&self, rot_idx: usize) -> isize {
         let piece = self.get_rotation(rot_idx);
         piece.iter().map(|&(_, y)| y).max().unwrap()
@@ -146,3 +147,80 @@ const O_ROTATIONS: [[Block; 4]; 4] = [
     [(0, 0), (1, 0), (0, 1), (1, 1)],
     [(0, 0), (1, 0), (0, 1), (1, 1)], // All rotations are the same
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_piece_skirt() {
+        // Test each piece type
+        let pieces = [
+            PieceType::I,
+            PieceType::J,
+            PieceType::L,
+            PieceType::S,
+            PieceType::Z,
+            PieceType::T,
+            PieceType::O,
+        ];
+
+        for piece_type in pieces.iter() {
+            for rot_idx in 0..piece_type.rotation_count() {
+                let rotation = piece_type.get_rotation(rot_idx);
+                let skirt = piece_type.skirt(rot_idx);
+
+                // Find the min/max x manually to verify
+                let min_x = rotation.iter().map(|&(x, _)| x).min().unwrap();
+                let max_x = rotation.iter().map(|&(x, _)| x).max().unwrap();
+
+                // Verify skirt length
+                let expected_width = (max_x - min_x + 1) as usize;
+                assert_eq!(
+                    skirt.len(),
+                    expected_width,
+                    "Incorrect skirt width for {:?} rotation {}",
+                    piece_type,
+                    rot_idx
+                );
+
+                // Verify each skirt value
+                for x in min_x..=max_x {
+                    let rel_x = (x - min_x) as usize;
+
+                    // Calculate expected min y for this x
+                    let expected_min_y = rotation
+                        .iter()
+                        .filter(|&&(cell_x, _)| cell_x == x)
+                        .map(|&(_, cell_y)| cell_y)
+                        .min();
+
+                    // If there's no cell at this x, the skirt should be isize::MAX
+                    // Otherwise, it should be the minimum y
+                    if let Some(min_y) = expected_min_y {
+                        assert_eq!(
+                            skirt[rel_x], min_y,
+                            "Incorrect skirt value for {:?} rotation {} at x={}",
+                            piece_type, rot_idx, x
+                        );
+                    } else {
+                        assert_eq!(
+                            skirt[rel_x],
+                            isize::MAX,
+                            "Expected MAX skirt value for {:?} rotation {} at x={}",
+                            piece_type,
+                            rot_idx,
+                            x
+                        );
+                    }
+                }
+
+                // Print the test results for debugging
+                println!("Piece: {:?}, Rotation: {}", piece_type, rot_idx);
+                println!("Cells: {:?}", rotation);
+                println!("Skirt: {:?}", skirt);
+                println!("-----");
+            }
+        }
+    }
+}

@@ -14,6 +14,7 @@ use nannou::{
 // helps visualize grid for debugging
 const DEBUG: bool = true;
 
+#[derive(Debug)]
 pub enum GameState {
     Ready,    // ready to spawn a new piece
     Falling,  // Piece is falling
@@ -24,7 +25,7 @@ pub enum GameState {
 pub enum PlayerInput {
     L,
     R,
-    Drop,
+    HardDrop,
     Rotate,
 }
 
@@ -60,7 +61,7 @@ impl BoardInstance {
             location,
             cell_size,
 
-            color: rgba(0.0, 1.0, 0.0, 1.0),
+            color: rgba(0.51, 0.81, 0.94, 1.0),
 
             game_state: GameState::Ready,
             active_piece: None,
@@ -73,7 +74,7 @@ impl BoardInstance {
 
     /************************ Update orchestrator *******************************/
 
-    pub fn update(&mut self, dt: f32, input: Option<PlayerInput>, rng: &mut ThreadRng) {
+    pub fn update(&mut self, dt: f32, input: &Option<PlayerInput>, rng: &mut ThreadRng) {
         match self.game_state {
             // Main Game State Machine
             GameState::Ready => {
@@ -89,7 +90,9 @@ impl BoardInstance {
                 self.gravity_timer += dt;
                 if self.gravity_timer >= self.gravity_interval {
                     self.gravity_timer = 0.0;
-                    //self.apply_gravity();
+                    if !self.apply_gravity() {
+                        self.game_state = GameState::Locking;
+                    }
                 }
             }
 
@@ -128,7 +131,7 @@ impl BoardInstance {
         match can_place {
             PlaceResult::PlaceOk | PlaceResult::RowFilled => {
                 if DEBUG {
-                    self.spawn_new_piece_msg(&new_piece);
+                    spawn_new_piece_msg(&new_piece);
                 }
                 self.active_piece = Some(new_piece);
                 true
@@ -141,12 +144,34 @@ impl BoardInstance {
         }
     }
 
-    fn handle_input(&mut self, input: PlayerInput) {
-        todo!();
-    }
+    fn handle_input(&mut self, input: &PlayerInput) {
+        match input {
+            PlayerInput::L => {
+                if let Some(piece) = self.active_piece.as_mut() {
+                    let new_pos = BoardPosition {
+                        x: piece.position.x - 1,
+                        y: piece.position.y,
+                    };
 
-    fn apply_gravity(&mut self) {
-        todo!();
+                    self.move_active_piece(new_pos);
+                }
+            }
+            PlayerInput::R => {
+                if let Some(piece) = self.active_piece.as_mut() {
+                    let new_pos = BoardPosition {
+                        x: piece.position.x + 1,
+                        y: piece.position.y,
+                    };
+
+                    self.move_active_piece(new_pos);
+                }
+            }
+            PlayerInput::HardDrop => {
+                println!("Trying hard drop");
+                self.hard_drop();
+            }
+            _ => {}
+        }
     }
 
     fn commit_piece(&mut self) {
@@ -156,8 +181,65 @@ impl BoardInstance {
         }
     }
 
-    fn clear_lines(&mut self) {
-        todo!();
+    fn clear_lines(&mut self) {}
+    /************************ Piece movement methods ************************/
+    fn apply_gravity(&mut self) -> bool {
+        if let Some(piece) = self.active_piece.as_mut() {
+            let next_pos = BoardPosition {
+                x: piece.position.x,
+                y: piece.position.y - 1,
+            };
+
+            let can_place = self.board.try_place(piece, next_pos);
+
+            match can_place {
+                PlaceResult::PlaceOk | PlaceResult::RowFilled => {
+                    if DEBUG {
+                        apply_gravity_msg(piece);
+                    }
+                    piece.position = next_pos;
+                    true
+                }
+
+                PlaceResult::OutOfBounds | PlaceResult::PlaceBad => false,
+            }
+        } else {
+            false
+        }
+    }
+
+    fn hard_drop(&mut self) {
+        if let Some(piece) = self.active_piece.as_mut() {
+            let drop_pos = self.board.get_drop_location(piece);
+
+            // move piece to calculated position
+            if self.move_active_piece(drop_pos) {
+                // Transition to locking
+                self.game_state = GameState::Locking;
+                if DEBUG {
+                    println!("Hard drop executed: piece at y: {}", drop_pos.y);
+                }
+            } else {
+                println!("Hard drop failed: attempted at y: {}", drop_pos.y);
+            }
+        }
+    }
+
+    fn move_active_piece(&mut self, new_pos: BoardPosition) -> bool {
+        if let Some(piece) = self.active_piece.as_mut() {
+            let can_place = self.board.try_place(piece, new_pos);
+
+            match can_place {
+                PlaceResult::PlaceOk | PlaceResult::RowFilled => {
+                    piece.position = new_pos;
+                    true
+                }
+
+                PlaceResult::OutOfBounds | PlaceResult::PlaceBad => false,
+            }
+        } else {
+            false
+        }
     }
 
     /************************ Piece creation methods ************************/
@@ -207,7 +289,7 @@ impl BoardInstance {
 
         // Draw block
         draw.rect()
-            .stroke_weight(2.0)
+            .stroke_weight(1.0)
             .stroke(WHITE)
             .x_y(screen_x, screen_y)
             .w_h(self.cell_size, self.cell_size) // cell size
@@ -222,7 +304,7 @@ impl BoardInstance {
 
         // Draw block
         draw.rect()
-            .stroke_weight(2.0)
+            .stroke_weight(1.0)
             .stroke(WHITE)
             .x_y(screen_x, screen_y)
             .w_h(self.cell_size, self.cell_size) // cell size
@@ -238,14 +320,22 @@ impl BoardInstance {
     pub fn board_mut(&mut self) -> &mut Board {
         &mut self.board
     }
+}
 
-    /************************ Stdout methods *******************************/
+/************************ Stdout functions *******************************/
 
-    fn spawn_new_piece_msg(&self, piece: &PieceInstance) {
-        println!("\n-- Spawned new piece --");
-        println!(
-            "PieceType: {:?}\nPosition:{:?}\n",
-            piece.typ, piece.position
-        )
-    }
+fn spawn_new_piece_msg(piece: &PieceInstance) {
+    println!("\n-- Spawned new piece --");
+    println!(
+        "PieceType: {:?}\nPosition:{:?}\n",
+        piece.typ, piece.position
+    )
+}
+
+fn apply_gravity_msg(piece: &PieceInstance) {
+    println!("Applied gravity...");
+    println!(
+        "PieceType: {:?}\nNew Position:{:?}\n",
+        piece.typ, piece.position
+    )
 }

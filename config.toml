@@ -6,11 +6,11 @@
 width = 16
 height = 24
 # grid block size in screen pts (float):
-cell_size = 20.0
+cell_size = 25.0
 # initial time between gravity steps (float):
-gravity_interval = 1.0
+gravity_interval = 0.5
 # initial time before piece locks into place (float):
-lock_delay = 1.0
+lock_delay = 0.5
 
 
 [paths]
@@ -18,7 +18,7 @@ lock_delay = 1.0
 output_directory = "frames"
 
 [rendering]
-texture_width = 1920
+texture_width = 3800
 texture_height = 1080
 
 # Please don't change these
@@ -28,7 +28,7 @@ arc_resolution = 25
 [window]
 # The size of the monitoring window.
 # Currently scaling to 1/2 of texture resolution
-width = 960
+width = 1900
 height = 540
 
 [osc]

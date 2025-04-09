@@ -14,7 +14,7 @@ pub enum PlaceResult {
 pub struct Board {
     pub width: isize,  // the overall width in cells
     pub height: isize, // the overall height in cells
-    state: BoardState, // the game state
+    state: BoardState, // the grid state
     locked: bool,      // true when all pieces are locked
 }
 
@@ -29,29 +29,6 @@ impl Board {
     }
 
     /************************ Piece Placement *******************************/
-
-    pub fn drop_piece(&mut self, piece: &PieceInstance, pos: BoardPosition) -> PlaceResult {
-        let (min, max) = piece.typ.minmax_x(piece.rot_idx);
-        let board_min = pos.x + min;
-        let board_max = pos.x + max;
-        let skirt = piece.typ.skirt(piece.rot_idx);
-
-        let mut max_height = isize::MIN;
-        for x in board_min..=board_max {
-            // CAUTION: assumes the piece is in a legal position
-            if skirt[x as usize] > max_height {
-                max_height = skirt[x as usize];
-            }
-        }
-
-        self.try_place(
-            piece,
-            BoardPosition {
-                x: pos.x,
-                y: max_height,
-            },
-        )
-    }
 
     // Sees if the next placement is valid
     pub fn try_place(&mut self, piece: &PieceInstance, pos: BoardPosition) -> PlaceResult {
@@ -81,6 +58,50 @@ impl Board {
         }
     }
 
+    pub fn get_drop_location(&self, piece: &PieceInstance) -> BoardPosition {
+        let skirt = piece.typ.skirt(piece.rot_idx);
+
+        // Calculate grid min/max x
+        let (min_dx, _) = piece.typ.minmax_x(piece.rot_idx);
+
+        // Find the drop height
+        let mut max_required_y = 0;
+
+        // iterate over each column that the piece occupies
+        for (rel_x, &skirt_val) in skirt.iter().enumerate() {
+            // convert relative_x to board x, accounting for how skirt index is
+            // relative to min_x
+            let board_x = piece.position.x + min_dx + rel_x as isize;
+
+            // check if OOB
+            if board_x < 0 || board_x >= self.width {
+                continue;
+            }
+
+            // get this column's height
+            let col_height = self.col_score(board_x).unwrap_or(0);
+
+            // calculate the required valid y value for this column
+            let required_y = if col_height == 0 {
+                0 - skirt_val
+            } else {
+                col_height + 1 - skirt_val
+            };
+
+            if required_y > max_required_y {
+                max_required_y = required_y;
+            }
+        }
+
+        // 0 is the minimum y value
+        let final_y = std::cmp::max(0, max_required_y);
+
+        BoardPosition {
+            x: piece.position.x,
+            y: final_y,
+        }
+    }
+
     pub fn is_cell_filled(&self, pos: BoardPosition) -> bool {
         match self.idx(pos.x, pos.y) {
             Some(inx) => self.state.grid[inx],
@@ -90,8 +111,17 @@ impl Board {
 
     fn fill_cell(&mut self, pos: BoardPosition) {
         if let Some(idx) = self.idx(pos.x, pos.y) {
+            // Update grid
             self.state.grid[idx] = true;
+
+            // Update row and column scores
+            self.update_scores(pos);
         }
+    }
+
+    fn update_scores(&mut self, pos: BoardPosition) {
+        self.state.update_row_score(pos);
+        self.state.update_col_score(pos);
     }
 
     fn is_row_filled_2(&self, y: isize) -> bool {
@@ -133,16 +163,16 @@ impl Board {
         self.width / 2
     }
 
-    fn row_score(&self, row: isize) -> Option<isize> {
-        if row >= self.height {
+    pub fn row_score(&self, row: isize) -> Option<isize> {
+        if row >= self.height || row < 0 {
             println!("Warning: out-of-bounds y: {}", row);
             return None;
         }
         Some(self.state.row_score[row as usize])
     }
 
-    fn col_score(&self, col: isize) -> Option<isize> {
-        if col >= self.width {
+    pub fn col_score(&self, col: isize) -> Option<isize> {
+        if col >= self.width || col < 0 {
             println!("Warning: out-of-bounds x: {}", col);
             return None;
         }
@@ -163,6 +193,16 @@ impl BoardState {
             grid: vec![false; width * height],
             row_score: vec![0; height],
             col_score: vec![0; width],
+        }
+    }
+
+    pub fn update_row_score(&mut self, pos: BoardPosition) {
+        self.row_score[pos.y as usize] += 1;
+    }
+
+    pub fn update_col_score(&mut self, pos: BoardPosition) {
+        if pos.y > self.col_score[pos.x as usize] {
+            self.col_score[pos.x as usize] = pos.y;
         }
     }
 }

@@ -4,7 +4,7 @@ use nannou::prelude::*;
 use std::{collections::HashMap, time::Instant};
 use tacit_gameover::{
     config::*,
-    views::{BackgroundManager, BoardInstance},
+    views::{BackgroundManager, BoardInstance, PlayerInput},
 };
 
 struct Model {
@@ -14,6 +14,9 @@ struct Model {
 
     // Background
     background: BackgroundManager,
+
+    // Player input pending update
+    player_input: Option<PlayerInput>,
 
     // Random
     rng: nannou::rand::rngs::ThreadRng,
@@ -98,6 +101,8 @@ fn model(app: &App) -> Model {
 
         background: BackgroundManager::default(),
 
+        player_input: None,
+
         rng: nannou::rand::thread_rng(),
 
         draw,
@@ -157,9 +162,11 @@ fn update(app: &App, model: &mut Model, _update: Update) {
 
     // Update & draw the boards
     for board in model.boards.values_mut() {
-        board.update(dt, None, &mut model.rng);
+        board.update(dt, &model.player_input, &mut model.rng);
         board.draw(&model.draw);
     }
+
+    model.player_input = None;
 
     // Handle FPS and origin display
     if model.verbose {
@@ -182,6 +189,10 @@ fn view(_app: &App, model: &Model, frame: Frame) {
 
 fn key_pressed(app: &App, model: &mut Model, key: Key) {
     match key {
+        Key::Left => model.player_input = Some(PlayerInput::L),
+        Key::Right => model.player_input = Some(PlayerInput::R),
+        Key::Space => model.player_input = Some(PlayerInput::HardDrop),
+
         Key::G => {
             model.make_board("board", vec2(0.0, 0.0));
         }
