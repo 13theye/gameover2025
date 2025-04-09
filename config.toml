@@ -5,8 +5,13 @@
 # width and height in grid blocks (integer)
 width = 16
 height = 24
-# grid block size in screen pts (float)
+# grid block size in screen pts (float):
 cell_size = 20.0
+# initial time between gravity steps (float):
+gravity_interval = 1.0
+# initial time before piece locks into place (float):
+lock_delay = 1.0
+
 
 [paths]
 #paths are relative to executable directory

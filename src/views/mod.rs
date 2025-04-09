@@ -6,4 +6,4 @@ pub mod piece_instance;
 
 pub use background::BackgroundManager;
 pub use board_instance::BoardInstance;
-pub use piece_instance::PieceInstance;
+pub use piece_instance::{BoardPosition, PieceInstance, RotationDirection};

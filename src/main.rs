@@ -15,6 +15,9 @@ struct Model {
     // Background
     background: BackgroundManager,
 
+    // Random
+    rng: nannou::rand::rngs::ThreadRng,
+
     // Nannou API
     draw: nannou::Draw,
     draw_renderer: nannou::draw::Renderer,
@@ -95,6 +98,8 @@ fn model(app: &App) -> Model {
 
         background: BackgroundManager::default(),
 
+        rng: nannou::rand::thread_rng(),
+
         draw,
         draw_renderer,
         texture,
@@ -114,7 +119,15 @@ fn model(app: &App) -> Model {
 impl Model {
     fn make_board(&mut self, id: &str, location: Vec2) {
         let config = &self.board_config;
-        let board = BoardInstance::new(id, location, config.width, config.height, config.cell_size);
+        let board = BoardInstance::new(
+            id,
+            location,
+            config.width,
+            config.height,
+            config.cell_size,
+            config.gravity_interval,
+            config.lock_delay,
+        );
         self.boards.insert(board.id.to_owned(), board);
         println!("\n<------ Board Created: <{}> ----->", id);
         println!(
@@ -142,8 +155,9 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Handle the background
     model.background.draw(&model.draw, app.time);
 
-    // Draw the boards
-    for board in model.boards.values() {
+    // Update & draw the boards
+    for board in model.boards.values_mut() {
+        board.update(dt, None, &mut model.rng);
         board.draw(&model.draw);
     }
 

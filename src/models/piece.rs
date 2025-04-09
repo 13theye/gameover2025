@@ -8,7 +8,7 @@
 // Type alias for a Tetromino block
 type Block = (isize, isize);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum PieceType {
     I,
     J,
@@ -64,7 +64,26 @@ impl PieceType {
         )
     }
 
+    pub fn max_y(&self, rot_idx: usize) -> isize {
+        let piece = self.get_rotation(rot_idx);
+        piece.iter().map(|&(_, y)| y).max().unwrap()
+    }
+
     /******************* Utility Methods ******************/
+    const ALL: [PieceType; 7] = [
+        PieceType::I,
+        PieceType::J,
+        PieceType::L,
+        PieceType::S,
+        PieceType::Z,
+        PieceType::T,
+        PieceType::O,
+    ];
+
+    pub fn from_idx(idx: usize) -> Self {
+        let safe_idx = idx % Self::ALL.len();
+        Self::ALL[safe_idx]
+    }
 
     pub const fn get_rotation(&self, rot_idx: usize) -> &'static [Block; 4] {
         &self.rotations()[rot_idx % self.rotation_count()]
@@ -117,8 +136,8 @@ const Z_ROTATIONS: [[Block; 4]; 4] = [
 const T_ROTATIONS: [[Block; 4]; 4] = [
     [(-1, 0), (0, 0), (1, 0), (0, 1)],  // 0°
     [(0, -1), (0, 0), (1, 0), (0, 1)],  // 90°
-    [(0, -1), (0, 0), (-1, 0), (0, 1)], // 270°
     [(-1, 0), (0, 0), (1, 0), (0, -1)], // 180°
+    [(0, -1), (0, 0), (-1, 0), (0, 1)], // 270°
 ];
 
 const O_ROTATIONS: [[Block; 4]; 4] = [

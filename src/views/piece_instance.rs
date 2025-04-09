@@ -12,9 +12,10 @@ pub enum RotationDirection {
 }
 
 // Board position of a piece
-struct BoardPosition {
-    x: isize,
-    y: isize,
+#[derive(Debug, Copy, Clone)]
+pub struct BoardPosition {
+    pub x: isize,
+    pub y: isize,
 }
 
 type Cells = [(isize, isize); 4];

@@ -9,6 +9,8 @@ pub struct BoardConfig {
     pub width: usize,
     pub height: usize,
     pub cell_size: f32,
+    pub gravity_interval: f32,
+    pub lock_delay: f32,
 }
 
 #[derive(Debug, Deserialize)]

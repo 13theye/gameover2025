@@ -2,7 +2,7 @@
 //
 // Defining the Tetris Board model
 
-use crate::views::PieceInstance;
+use crate::views::{BoardPosition, PieceInstance};
 
 pub enum PlaceResult {
     PlaceOk,
@@ -15,7 +15,7 @@ pub struct Board {
     pub width: isize,  // the overall width in cells
     pub height: isize, // the overall height in cells
     state: BoardState, // the game state
-    commit: bool,      // true when all pieces are locked
+    locked: bool,      // true when all pieces are locked
 }
 
 impl Board {
@@ -24,16 +24,16 @@ impl Board {
             width: width as isize,
             height: height as isize,
             state: BoardState::new(width, height),
-            commit: true,
+            locked: false,
         }
     }
 
     /************************ Piece Placement *******************************/
 
-    pub fn drop_piece(&mut self, piece: &PieceInstance, pos_x: isize, pos_y: isize) -> PlaceResult {
+    pub fn drop_piece(&mut self, piece: &PieceInstance, pos: BoardPosition) -> PlaceResult {
         let (min, max) = piece.typ.minmax_x(piece.rot_idx);
-        let board_min = pos_x + min;
-        let board_max = pos_x + max;
+        let board_min = pos.x + min;
+        let board_max = pos.x + max;
         let skirt = piece.typ.skirt(piece.rot_idx);
 
         let mut max_height = isize::MIN;
@@ -44,47 +44,58 @@ impl Board {
             }
         }
 
-        self.try_place(piece, pos_x, max_height)
+        self.try_place(
+            piece,
+            BoardPosition {
+                x: pos.x,
+                y: max_height,
+            },
+        )
     }
 
     // Sees if the next placement is valid
-    pub fn try_place(&mut self, piece: &PieceInstance, pos_x: isize, pos_y: isize) -> PlaceResult {
+    pub fn try_place(&mut self, piece: &PieceInstance, pos: BoardPosition) -> PlaceResult {
         for &(dx, dy) in piece.cells() {
-            let x = pos_x + dx;
-            let y = pos_y + dy;
+            let x = pos.x + dx;
+            let y = pos.y + dy;
 
             if self.idx(x, y).is_none() {
                 return PlaceResult::OutOfBounds;
             }
 
-            if self.is_cell_filled(x, y) {
+            if self.is_cell_filled(BoardPosition { x, y }) {
                 return PlaceResult::PlaceBad;
             }
-        }
-
-        // Place the piece
-        for &(dx, dy) in piece.cells() {
-            self.fill_cell(pos_x + dx, pos_y + dy)
         }
 
         PlaceResult::PlaceOk
     }
 
-    pub fn is_cell_filled(&self, x: isize, y: isize) -> bool {
-        match self.idx(x, y) {
+    // commit a pre-validated piece
+    pub fn commit_piece(&mut self, piece: &PieceInstance) {
+        for &(dx, dy) in piece.cells() {
+            self.fill_cell(BoardPosition {
+                x: piece.position.x + dx,
+                y: piece.position.y + dy,
+            });
+        }
+    }
+
+    pub fn is_cell_filled(&self, pos: BoardPosition) -> bool {
+        match self.idx(pos.x, pos.y) {
             Some(inx) => self.state.grid[inx],
             None => false,
         }
     }
 
-    fn fill_cell(&mut self, x: isize, y: isize) {
-        if let Some(idx) = self.idx(x, y) {
+    fn fill_cell(&mut self, pos: BoardPosition) {
+        if let Some(idx) = self.idx(pos.x, pos.y) {
             self.state.grid[idx] = true;
         }
     }
 
     fn is_row_filled_2(&self, y: isize) -> bool {
-        (0..self.width).all(|x| self.is_cell_filled(x, y))
+        (0..self.width).all(|x| self.is_cell_filled(BoardPosition { x, y }))
     }
 
     fn is_row_filled(&self, y: isize) -> bool {
@@ -117,7 +128,7 @@ impl Board {
         Some((x, y))
     }
 
-    fn mid_x(&self) -> isize {
+    pub fn mid_x(&self) -> isize {
         // note: in Rust, this always rounds down
         self.width / 2
     }

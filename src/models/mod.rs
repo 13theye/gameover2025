@@ -3,5 +3,5 @@
 pub mod board;
 pub mod piece;
 
-pub use board::Board;
+pub use board::{Board, PlaceResult};
 pub use piece::PieceType;
