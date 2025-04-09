@@ -97,6 +97,10 @@ impl BoardInstance {
             }
 
             GameState::Locking => {
+                if let Some(input) = input {
+                    self.handle_input(input);
+                }
+
                 self.lock_timer += dt;
                 if self.lock_timer >= self.lock_delay {
                     self.lock_timer = 0.0;
