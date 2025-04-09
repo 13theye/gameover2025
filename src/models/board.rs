@@ -4,6 +4,7 @@
 
 use crate::views::{BoardPosition, PieceInstance};
 
+#[derive(PartialEq)]
 pub enum PlaceResult {
     PlaceOk,
     RowFilled,

@@ -41,7 +41,7 @@ impl PieceInstance {
         self.typ.get_rotation(self.rot_idx)
     }
 
-    fn rotate(&mut self, direction: RotationDirection) -> &Cells {
+    pub fn rotate(&mut self, direction: RotationDirection) -> &Cells {
         let count = self.typ.rotation_count();
 
         let inx = match direction {

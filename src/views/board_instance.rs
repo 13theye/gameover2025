@@ -170,11 +170,12 @@ impl BoardInstance {
                     self.move_active_piece(new_pos);
                 }
             }
+            PlayerInput::Rotate => {
+                self.rotate_active_piece();
+            }
             PlayerInput::HardDrop => {
-                println!("Trying hard drop");
                 self.hard_drop();
             }
-            _ => {}
         }
     }
 
@@ -186,7 +187,9 @@ impl BoardInstance {
     }
 
     fn clear_lines(&mut self) {}
+
     /************************ Piece movement methods ************************/
+
     fn apply_gravity(&mut self) -> bool {
         if let Some(piece) = self.active_piece.as_mut() {
             let next_pos = BoardPosition {
@@ -198,9 +201,6 @@ impl BoardInstance {
 
             match can_place {
                 PlaceResult::PlaceOk | PlaceResult::RowFilled => {
-                    if DEBUG {
-                        apply_gravity_msg(piece);
-                    }
                     piece.position = next_pos;
                     true
                 }
@@ -243,6 +243,24 @@ impl BoardInstance {
             }
         } else {
             false
+        }
+    }
+
+    fn rotate_active_piece(&mut self) {
+        if let Some(piece) = &mut self.active_piece {
+            // Save the current rotation index
+            let old_rot_idx = piece.rot_idx;
+
+            // Perform the rotation
+            piece.rotate(RotationDirection::Cw);
+
+            // Check if the new position is valid
+            if self.board.try_place(piece, piece.position) == PlaceResult::PlaceOk {
+                // Rotation successful, no further action needed
+            } else {
+                // Revert to the previous rotation
+                piece.rot_idx = old_rot_idx;
+            }
         }
     }
 
@@ -332,14 +350,6 @@ fn spawn_new_piece_msg(piece: &PieceInstance) {
     println!("\n-- Spawned new piece --");
     println!(
         "PieceType: {:?}\nPosition:{:?}\n",
-        piece.typ, piece.position
-    )
-}
-
-fn apply_gravity_msg(piece: &PieceInstance) {
-    println!("Applied gravity...");
-    println!(
-        "PieceType: {:?}\nNew Position:{:?}\n",
         piece.typ, piece.position
     )
 }

@@ -191,6 +191,7 @@ fn key_pressed(app: &App, model: &mut Model, key: Key) {
     match key {
         Key::Left => model.player_input = Some(PlayerInput::L),
         Key::Right => model.player_input = Some(PlayerInput::R),
+        Key::Up => model.player_input = Some(PlayerInput::Rotate),
         Key::Space => model.player_input = Some(PlayerInput::HardDrop),
 
         Key::G => {
