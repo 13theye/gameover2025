@@ -101,6 +101,23 @@ impl BoardInstance {
                     self.handle_input(input);
                 }
 
+                // check if the piece can now fall because of some input
+                // during the Locking period
+                if let Some(piece) = self.active_piece.as_mut() {
+                    let next_pos = BoardPosition {
+                        x: piece.position.x,
+                        y: piece.position.y - 1,
+                    };
+
+                    if self.board.try_place(piece, next_pos) == PlaceResult::PlaceOk {
+                        piece.position = next_pos;
+                        // Reset timers when piece moves
+                        self.lock_timer = 0.0;
+                        self.gravity_timer = 0.0;
+                        self.game_state = GameState::Falling;
+                    }
+                }
+
                 self.lock_timer += dt;
                 if self.lock_timer >= self.lock_delay {
                     self.lock_timer = 0.0;
