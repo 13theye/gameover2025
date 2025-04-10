@@ -42,11 +42,11 @@ pub struct BoardInstance {
     location: Vec2, // screen location of the BoardInstance
     cell_size: f32, // size of the grid cells
 
-    color: Rgba,
+    color: Rgba, // color of cells
 
     game_state: GameState,
     prev_game_state: Option<GameState>, // used to come back from pause, for example
-    pause_state: Option<PauseState>,
+    pause_state: Option<PauseState>,    // timers that are saved when pausing
 
     active_piece: Option<PieceInstance>,
     gravity_interval: f32, // time between gravity steps
@@ -87,19 +87,25 @@ impl BoardInstance {
 
     /************************ Update orchestrator *******************************/
 
+    // Game State Machine
     pub fn update(&mut self, dt: f32, input: &Option<PlayerInput>, rng: &mut ThreadRng) {
         match self.game_state {
-            // Main Game State Machine
+            // Spawn a new piece
             GameState::Ready => {
-                self.spawn_new_piece(rng);
-                self.game_state = GameState::Falling;
+                if self.spawn_new_piece(rng) {
+                    self.game_state = GameState::Falling;
+                } else {
+                    self.game_state = GameState::GameOver;
+                }
             }
 
+            // Handle an active piece
             GameState::Falling => {
                 if let Some(input) = input {
                     self.handle_input(input);
                 }
 
+                // Drop the piece 1 cell per gravity_interval
                 self.gravity_timer += dt;
                 if self.gravity_timer >= self.gravity_interval {
                     self.gravity_timer = 0.0;
@@ -109,13 +115,13 @@ impl BoardInstance {
                 }
             }
 
+            // Last-minute adjustment period for piece
             GameState::Locking => {
                 if let Some(input) = input {
                     self.handle_input(input);
                 }
-
-                // check if the piece can now fall because of some input
-                // during the Locking period
+                // Check if the piece can now fall
+                // because of some input during the Locking period
                 if let Some(piece) = self.active_piece.as_mut() {
                     let next_pos = BoardPosition {
                         x: piece.position.x,
@@ -131,20 +137,29 @@ impl BoardInstance {
                     }
                 }
 
+                // Lock the piece, commit, check for lines, return to Ready state.
                 self.lock_timer += dt;
                 if self.lock_timer >= self.lock_delay {
                     self.lock_timer = 0.0;
-                    self.commit_piece();
-                    print_col_score(self.board.col_score_all());
-                    self.clear_lines();
+
+                    if let Some(filled_rows) = self.commit_piece() {
+                        self.clear_lines(filled_rows);
+                    }
+
+                    if DEBUG {
+                        print_col_score(self.board.col_score_all());
+                    }
+
                     self.game_state = GameState::Ready;
                 }
             }
 
+            // Grid has reached the top
             GameState::GameOver => {
                 // gameover state
             }
 
+            // Pause the game
             GameState::Paused => {
                 if let Some(input) = input {
                     self.handle_input(input);
@@ -166,24 +181,124 @@ impl BoardInstance {
 
         let new_piece = PieceInstance::new(piece_type, color, spawn_pos);
 
-        // Check if piece can be placed
-        let can_place = self.board.try_place(&new_piece, spawn_pos);
+        // Verify that piece can be placed
+        let can_place = matches!(
+            self.board.try_place(&new_piece, spawn_pos),
+            PlaceResult::PlaceOk | PlaceResult::RowFilled
+        );
 
-        match can_place {
-            PlaceResult::PlaceOk | PlaceResult::RowFilled => {
+        if can_place {
+            self.active_piece = Some(new_piece);
+        }
+
+        can_place
+    }
+
+    // Freeze a piece in place
+    fn commit_piece(&mut self) -> Option<Vec<isize>> {
+        self.active_piece
+            .take()
+            .and_then(|piece| self.board.commit_piece(&piece))
+    }
+
+    fn clear_lines(&mut self, rows: Vec<isize>) {
+        for row in rows {
+            println!("Clearing row {}", row);
+        }
+    }
+
+    /************************ Piece movement methods ************************/
+
+    // Drop a piece down the board
+    fn apply_gravity(&mut self) -> bool {
+        let Some(piece) = self.active_piece.as_mut() else {
+            return false;
+        };
+
+        let next_pos = BoardPosition {
+            x: piece.position.x,
+            y: piece.position.y - 1,
+        };
+
+        let can_place = matches!(
+            self.board.try_place(piece, next_pos),
+            PlaceResult::PlaceOk | PlaceResult::RowFilled
+        );
+
+        if can_place {
+            piece.position = next_pos;
+        }
+
+        can_place
+    }
+
+    // Player-induced drop down to lowest legal position
+    fn hard_drop(&mut self) {
+        if let Some(piece) = self.active_piece.as_mut() {
+            let drop_pos = self.board.get_drop_location(piece);
+
+            // move piece to calculated position
+            if self.move_active_piece(drop_pos) {
+                // Transition to locking
+                self.game_state = GameState::Locking;
                 if DEBUG {
-                    spawn_new_piece_msg(&new_piece);
+                    println!("Hard drop executed: piece at y: {}", drop_pos.y);
                 }
-                self.active_piece = Some(new_piece);
-                true
-            }
-
-            PlaceResult::OutOfBounds | PlaceResult::PlaceBad => {
-                self.game_state = GameState::GameOver;
-                false
+            } else {
+                println!("Hard drop failed: attempted at y: {}", drop_pos.y);
             }
         }
     }
+
+    // Player-induced movement of piece
+    fn move_active_piece(&mut self, new_pos: BoardPosition) -> bool {
+        let Some(piece) = self.active_piece.as_mut() else {
+            return false;
+        };
+
+        let can_place = matches!(
+            self.board.try_place(piece, new_pos),
+            PlaceResult::PlaceOk | PlaceResult::RowFilled
+        );
+
+        if can_place {
+            piece.position = new_pos;
+        }
+
+        can_place
+    }
+
+    // Player-induced piece rotation
+    // Only moves in Cw direction for now
+    fn rotate_active_piece(&mut self) {
+        if let Some(piece) = &mut self.active_piece {
+            // Save the current rotation index
+            let old_rot_idx = piece.rot_idx;
+
+            // Perform the rotation
+            piece.rotate(RotationDirection::Cw);
+
+            // Check if the new position is valid
+            if self.board.try_place(piece, piece.position) == PlaceResult::PlaceOk {
+                // Rotation successful, no further action needed
+            } else {
+                // Revert to the previous rotation
+                piece.rot_idx = old_rot_idx;
+            }
+        }
+    }
+
+    /************************ Piece creation methods ************************/
+    fn get_random_piece_type(&self, rng: &mut ThreadRng) -> PieceType {
+        let idx = rng.gen_range(0.0..7.0).trunc() as usize;
+        PieceType::from_idx(idx)
+    }
+
+    fn get_piece_color(&self) -> Rgba {
+        self.color
+    }
+
+    /************************ Input handling methods *******************************/
 
     fn handle_input(&mut self, input: &PlayerInput) {
         match input {
@@ -219,117 +334,19 @@ impl BoardInstance {
         }
     }
 
-    fn commit_piece(&mut self) {
-        if let Some(piece) = &self.active_piece {
-            self.board.commit_piece(piece);
-            self.active_piece = None;
-        }
-    }
-
-    fn clear_lines(&mut self) {}
-
-    /************************ Piece movement methods ************************/
-
-    fn apply_gravity(&mut self) -> bool {
-        if let Some(piece) = self.active_piece.as_mut() {
-            let next_pos = BoardPosition {
-                x: piece.position.x,
-                y: piece.position.y - 1,
-            };
-
-            let can_place = self.board.try_place(piece, next_pos);
-
-            match can_place {
-                PlaceResult::PlaceOk | PlaceResult::RowFilled => {
-                    piece.position = next_pos;
-                    true
-                }
-
-                PlaceResult::OutOfBounds | PlaceResult::PlaceBad => false,
-            }
-        } else {
-            false
-        }
-    }
-
-    fn hard_drop(&mut self) {
-        if let Some(piece) = self.active_piece.as_mut() {
-            let drop_pos = self.board.get_drop_location(piece);
-
-            // move piece to calculated position
-            if self.move_active_piece(drop_pos) {
-                // Transition to locking
-                self.game_state = GameState::Locking;
-                if DEBUG {
-                    println!("Hard drop executed: piece at y: {}", drop_pos.y);
-                }
-            } else {
-                println!("Hard drop failed: attempted at y: {}", drop_pos.y);
-            }
-        }
-    }
-
-    fn move_active_piece(&mut self, new_pos: BoardPosition) -> bool {
-        if let Some(piece) = self.active_piece.as_mut() {
-            let can_place = self.board.try_place(piece, new_pos);
-
-            match can_place {
-                PlaceResult::PlaceOk | PlaceResult::RowFilled => {
-                    piece.position = new_pos;
-                    true
-                }
-
-                PlaceResult::OutOfBounds | PlaceResult::PlaceBad => false,
-            }
-        } else {
-            false
-        }
-    }
-
-    fn rotate_active_piece(&mut self) {
-        if let Some(piece) = &mut self.active_piece {
-            // Save the current rotation index
-            let old_rot_idx = piece.rot_idx;
-
-            // Perform the rotation
-            piece.rotate(RotationDirection::Cw);
-
-            // Check if the new position is valid
-            if self.board.try_place(piece, piece.position) == PlaceResult::PlaceOk {
-                // Rotation successful, no further action needed
-            } else {
-                // Revert to the previous rotation
-                piece.rot_idx = old_rot_idx;
-            }
-        }
-    }
-
-    /************************ Piece creation methods ************************/
-    fn get_random_piece_type(&self, rng: &mut ThreadRng) -> PieceType {
-        let idx = rng.gen_range(0.0..7.0).trunc() as usize;
-        PieceType::from_idx(idx)
-    }
-
-    fn get_piece_color(&self) -> Rgba {
-        self.color
-    }
-
-    /************************ Meta methods *******************************/
     fn handle_pause(&mut self) {
         if self.game_state == GameState::Paused {
             // Exiting pause state
-            if let Some(prev_game_state) = self.prev_game_state {
-                // Restore previous game state
-                self.game_state = prev_game_state;
-                // Restore timers
-                if let Some(pause_state) = &self.pause_state {
-                    self.gravity_timer = pause_state.gravity_timer;
-                    self.lock_timer = pause_state.lock_timer;
-                }
-                self.pause_state = None;
-            } else {
-                // Fallback if somehow we don't have a previous state
-                self.game_state = GameState::Ready;
+            self.game_state = self.prev_game_state.take().unwrap_or(GameState::Ready);
+
+            // Restore timers if pause state exists
+            if let Some(PauseState {
+                gravity_timer,
+                lock_timer,
+            }) = self.pause_state.take()
+            {
+                self.gravity_timer = gravity_timer;
+                self.lock_timer = lock_timer;
             }
         } else {
             // Entering pause state
@@ -380,7 +397,7 @@ impl BoardInstance {
         // Draw block
         draw.rect()
             .stroke_weight(1.0)
-            .stroke(WHITE)
+            .stroke(BLACK)
             .x_y(screen_x, screen_y)
             .w_h(self.cell_size, self.cell_size) // cell size
             .color(color); // color

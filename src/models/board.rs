@@ -32,16 +32,18 @@ impl Board {
     /************************ Piece Placement *******************************/
 
     // Sees if the next placement is valid
-    pub fn try_place(&mut self, piece: &PieceInstance, pos: BoardPosition) -> PlaceResult {
+    pub fn try_place(&mut self, piece: &PieceInstance, board_pos: BoardPosition) -> PlaceResult {
         for &(dx, dy) in piece.cells() {
-            let x = pos.x + dx;
-            let y = pos.y + dy;
+            let cell_pos = BoardPosition {
+                x: board_pos.x + dx,
+                y: board_pos.y + dy,
+            };
 
-            if self.idx(x, y).is_none() {
+            if self.idx(cell_pos.x, cell_pos.y).is_none() {
                 return PlaceResult::OutOfBounds;
             }
 
-            if self.is_cell_filled(BoardPosition { x, y }) {
+            if self.is_cell_filled(cell_pos) {
                 return PlaceResult::PlaceBad;
             }
         }
@@ -49,16 +51,26 @@ impl Board {
         PlaceResult::PlaceOk
     }
 
-    // commit a pre-validated piece
-    pub fn commit_piece(&mut self, piece: &PieceInstance) {
-        for &(dx, dy) in piece.cells() {
-            self.fill_cell(BoardPosition {
-                x: piece.position.x + dx,
-                y: piece.position.y + dy,
-            });
-        }
+    // commit a pre-validated piece, returns any a Vec of any filled rows
+    pub fn commit_piece(&mut self, piece: &PieceInstance) -> Option<Vec<isize>> {
+        let filled_rows = piece
+            .cells()
+            .iter()
+            .filter_map(|&(dx, dy)| {
+                let cell_pos = BoardPosition {
+                    x: piece.position.x + dx,
+                    y: piece.position.y + dy,
+                };
+
+                // Remember the y-index of each row that has been filled
+                (self.fill_cell(cell_pos) == PlaceResult::RowFilled).then_some(cell_pos.y)
+            })
+            .collect::<Vec<isize>>();
+
+        (!filled_rows.is_empty()).then_some(filled_rows)
     }
 
+    // Find the lowest legal place for piece in its current x-position
     pub fn get_drop_location(&self, piece: &PieceInstance) -> BoardPosition {
         let skirt = piece.typ.skirt(piece.rot_idx);
 
@@ -105,37 +117,27 @@ impl Board {
         }
     }
 
+    fn fill_cell(&mut self, pos: BoardPosition) -> PlaceResult {
+        self.idx(pos.x, pos.y)
+            .map(|idx| {
+                self.state.grid[idx] = true;
+                self.state.update_col_score(pos);
+
+                // Notice if the row has been filled while updating row score
+                if self.state.update_row_score(pos) == self.width {
+                    PlaceResult::RowFilled
+                } else {
+                    PlaceResult::PlaceOk
+                }
+            })
+            // Invalid index means OOB
+            .unwrap_or(PlaceResult::OutOfBounds)
+    }
+
     pub fn is_cell_filled(&self, pos: BoardPosition) -> bool {
-        match self.idx(pos.x, pos.y) {
-            Some(inx) => self.state.grid[inx],
-            None => false,
-        }
-    }
-
-    fn fill_cell(&mut self, pos: BoardPosition) {
-        if let Some(idx) = self.idx(pos.x, pos.y) {
-            // Update grid
-            self.state.grid[idx] = true;
-
-            // Update row and column scores
-            self.update_scores(pos);
-        }
-    }
-
-    fn update_scores(&mut self, pos: BoardPosition) {
-        self.state.update_row_score(pos);
-        self.state.update_col_score(pos);
-    }
-
-    fn is_row_filled_2(&self, y: isize) -> bool {
-        (0..self.width).all(|x| self.is_cell_filled(BoardPosition { x, y }))
-    }
-
-    fn is_row_filled(&self, y: isize) -> bool {
-        match self.row_score(y) {
-            Some(score) => score == self.width,
-            None => false,
-        }
+        self.idx(pos.x, pos.y)
+            .map(|idx| self.state.grid[idx])
+            .unwrap_or(false)
     }
 
     /************************ Utility functions *******************************/
@@ -202,14 +204,16 @@ impl BoardState {
         }
     }
 
-    pub fn update_row_score(&mut self, pos: BoardPosition) {
-        self.row_score[pos.y as usize] += 1;
+    pub fn update_row_score(&mut self, pos: BoardPosition) -> isize {
+        let score = &mut self.row_score[pos.y as usize];
+        *score += 1;
+        *score
     }
 
     pub fn update_col_score(&mut self, pos: BoardPosition) {
         if pos.y >= self.col_score[pos.x as usize] {
             self.col_score[pos.x as usize] = pos.y + 1;
-            println!("Updating col score [{}] to {}", pos.x, pos.y);
+            println!("Updating row [{}] col score to: {}", pos.x, pos.y);
         }
     }
 }
