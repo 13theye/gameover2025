@@ -14,12 +14,13 @@ use nannou::{
 // helps visualize grid for debugging
 const DEBUG: bool = true;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum GameState {
     Ready,    // ready to spawn a new piece
     Falling,  // Piece is falling
     Locking,  // Piece has landed and is about to commit
     GameOver, // Game over
+    Paused,
 }
 
 pub enum PlayerInput {
@@ -27,6 +28,12 @@ pub enum PlayerInput {
     R,
     HardDrop,
     Rotate,
+    Pause,
+}
+
+struct PauseState {
+    gravity_timer: f32,
+    lock_timer: f32,
 }
 
 pub struct BoardInstance {
@@ -38,6 +45,9 @@ pub struct BoardInstance {
     color: Rgba,
 
     game_state: GameState,
+    prev_game_state: Option<GameState>, // used to come back from pause, for example
+    pause_state: Option<PauseState>,
+
     active_piece: Option<PieceInstance>,
     gravity_interval: f32, // time between gravity steps
     gravity_timer: f32,
@@ -64,6 +74,9 @@ impl BoardInstance {
             color: rgba(0.51, 0.81, 0.94, 1.0),
 
             game_state: GameState::Ready,
+            prev_game_state: None,
+            pause_state: None,
+
             active_piece: None,
             gravity_interval,
             gravity_timer: 0.0,
@@ -101,10 +114,28 @@ impl BoardInstance {
                     self.handle_input(input);
                 }
 
+                // check if the piece can now fall because of some input
+                // during the Locking period
+                if let Some(piece) = self.active_piece.as_mut() {
+                    let next_pos = BoardPosition {
+                        x: piece.position.x,
+                        y: piece.position.y - 1,
+                    };
+
+                    if self.board.try_place(piece, next_pos) == PlaceResult::PlaceOk {
+                        piece.position = next_pos;
+                        // Reset timers when piece moves
+                        self.lock_timer = 0.0;
+                        self.gravity_timer = 0.0;
+                        self.game_state = GameState::Falling;
+                    }
+                }
+
                 self.lock_timer += dt;
                 if self.lock_timer >= self.lock_delay {
                     self.lock_timer = 0.0;
                     self.commit_piece();
+                    print_col_score(self.board.col_score_all());
                     self.clear_lines();
                     self.game_state = GameState::Ready;
                 }
@@ -112,6 +143,12 @@ impl BoardInstance {
 
             GameState::GameOver => {
                 // gameover state
+            }
+
+            GameState::Paused => {
+                if let Some(input) = input {
+                    self.handle_input(input);
+                }
             }
         }
     }
@@ -123,7 +160,7 @@ impl BoardInstance {
         let color = self.get_piece_color();
 
         let spawn_pos = BoardPosition {
-            x: self.board.mid_x(),
+            x: self.board.mid_x() - piece_type.max_x(0) / 2,
             y: self.board.height - piece_type.max_y(0) - 1,
         };
 
@@ -175,6 +212,9 @@ impl BoardInstance {
             }
             PlayerInput::HardDrop => {
                 self.hard_drop();
+            }
+            PlayerInput::Pause => {
+                self.handle_pause();
             }
         }
     }
@@ -266,12 +306,40 @@ impl BoardInstance {
 
     /************************ Piece creation methods ************************/
     fn get_random_piece_type(&self, rng: &mut ThreadRng) -> PieceType {
-        let idx = rng.gen_range(0.0..6.0).trunc() as usize;
+        let idx = rng.gen_range(0.0..7.0).trunc() as usize;
         PieceType::from_idx(idx)
     }
 
     fn get_piece_color(&self) -> Rgba {
         self.color
+    }
+
+    /************************ Meta methods *******************************/
+    fn handle_pause(&mut self) {
+        if self.game_state == GameState::Paused {
+            // Exiting pause state
+            if let Some(prev_game_state) = self.prev_game_state {
+                // Restore previous game state
+                self.game_state = prev_game_state;
+                // Restore timers
+                if let Some(pause_state) = &self.pause_state {
+                    self.gravity_timer = pause_state.gravity_timer;
+                    self.lock_timer = pause_state.lock_timer;
+                }
+                self.pause_state = None;
+            } else {
+                // Fallback if somehow we don't have a previous state
+                self.game_state = GameState::Ready;
+            }
+        } else {
+            // Entering pause state
+            self.prev_game_state = Some(self.game_state);
+            self.pause_state = Some(PauseState {
+                gravity_timer: self.gravity_timer,
+                lock_timer: self.lock_timer,
+            });
+            self.game_state = GameState::Paused;
+        }
     }
 
     /************************ Drawing methods *******************************/
@@ -352,4 +420,9 @@ fn spawn_new_piece_msg(piece: &PieceInstance) {
         "PieceType: {:?}\nPosition:{:?}\n",
         piece.typ, piece.position
     )
+}
+
+fn print_col_score(col_score: &Vec<isize>) {
+    println!("\nCol heights:");
+    println!("{:?}", col_score);
 }
