@@ -82,13 +82,13 @@ impl Board {
             let skirt_val = skirt[x_offset as usize];
 
             // get this column's height
-            let col_height = self.col_score(board_x).unwrap_or(0);
+            let col_score = self.col_score(board_x).unwrap_or(0);
 
             // calculate the required valid y value for this column
-            let required_y = if col_height == 0 {
+            let required_y = if col_score == 0 {
                 0 - skirt_val // place at grid bottom
             } else {
-                col_height + 1 - skirt_val // place above highest piece
+                col_score + 1 - skirt_val // place above highest piece
             };
 
             if required_y > max_required_y {
@@ -145,7 +145,6 @@ impl Board {
     fn idx(&self, x: isize, y: isize) -> Option<usize> {
         // Check bounds first (including negative values)
         if x < 0 || y < 0 || x >= self.width || y >= self.height {
-            println!("Warning: out-of-bounds x: {}, y: {}", x, y);
             return None;
         }
         // Safe to convert to usize now
@@ -181,13 +180,17 @@ impl Board {
         }
         Some(self.state.col_score[col as usize])
     }
+
+    pub fn col_score_all(&self) -> &Vec<isize> {
+        &self.state.col_score
+    }
 }
 
 #[derive(Debug, Clone)]
 struct BoardState {
     grid: Vec<bool>,       // which cells are filled
     row_score: Vec<isize>, // how many cells are filled in each row
-    col_score: Vec<isize>, // filled height of each row
+    col_score: Vec<isize>, // height of the highest UNfilled cell of each col
 }
 
 impl BoardState {
@@ -204,8 +207,9 @@ impl BoardState {
     }
 
     pub fn update_col_score(&mut self, pos: BoardPosition) {
-        if pos.y > self.col_score[pos.x as usize] {
-            self.col_score[pos.x as usize] = pos.y;
+        if pos.y >= self.col_score[pos.x as usize] {
+            self.col_score[pos.x as usize] = pos.y + 1;
+            println!("Updating col score [{}] to {}", pos.x, pos.y);
         }
     }
 }

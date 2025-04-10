@@ -193,6 +193,7 @@ fn key_pressed(app: &App, model: &mut Model, key: Key) {
         Key::Right => model.player_input = Some(PlayerInput::R),
         Key::Up => model.player_input = Some(PlayerInput::Rotate),
         Key::Space => model.player_input = Some(PlayerInput::HardDrop),
+        Key::Return => model.player_input = Some(PlayerInput::Pause),
 
         Key::G => {
             model.make_board("board", vec2(0.0, 0.0));

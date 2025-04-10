@@ -3,7 +3,7 @@
 //
 // Defining the Tetris piece model
 //
-// A Piece's (0,0) is the central pivot point of rotation
+// A Piece's (0,0) is the bottom-left corner of the piece's footprint
 
 // Type alias for a Tetromino block
 type Block = (isize, isize);
@@ -64,6 +64,12 @@ impl PieceType {
         )
     }
 
+    // returns the maximum x offset
+    pub fn max_x(&self, rot_idx: usize) -> isize {
+        let piece = self.get_rotation(rot_idx);
+        piece.iter().map(|&(x, _)| x).max().unwrap()
+    }
+
     // returns the highest y offset
     pub fn max_y(&self, rot_idx: usize) -> isize {
         let piece = self.get_rotation(rot_idx);
@@ -97,7 +103,7 @@ impl PieceType {
 
 /******************* Piece Rotation Definitions ******************/
 
-// (0,0) is the central pivot point
+// bottom-left origin
 
 const I_ROTATIONS: [[Block; 4]; 4] = [
     [(0, 0), (1, 0), (2, 0), (3, 0)], // 0° - center is between blocks at (1.5, 0.5)
