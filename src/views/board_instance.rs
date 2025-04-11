@@ -484,34 +484,19 @@ impl BoardInstance {
             draw.rect()
                 .x_y(self.location.x, center_y)
                 .w_h(board_width, clear_height)
-                .color(rgba(1.0, 1.0, 1.0, 0.2));
+                .color(rgba(1.0, 1.0, 1.0, 0.8));
         }
 
         // Draw top and bottom lines
-        for (y_pos, trail_dir) in [(top_y, 1.0), (bottom_y, -1.0)] {
+        for y_pos in [top_y, bottom_y] {
             // Main line
             draw.line()
                 .points(
                     vec2(board_left_edge, y_pos),
                     vec2(board_left_edge + board_width, y_pos),
                 )
-                .color(rgba(1.0, 1.0, 1.0, 0.2))
+                .color(rgba(1.0, 1.0, 1.0, 0.8))
                 .stroke_weight(1.0);
-            /*
-            // Bloom trail
-            for i in 1..=8 {
-                let offset = i as f32 * trail_dir;
-                let alpha = 0.5 - (i as f32 * 0.04);
-
-                draw.line()
-                    .points(
-                        vec2(board_left_edge, y_pos - offset),
-                        vec2(board_left_edge + board_width, y_pos - offset),
-                    )
-                    .color(rgba(1.0, 1.0, 1.0, alpha))
-                    .stroke_weight(1.0);
-            }
-            */
         }
     }
 

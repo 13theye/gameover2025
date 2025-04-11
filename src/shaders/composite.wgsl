@@ -15,7 +15,7 @@ fn vs_main(@builtin(vertex_index) vert_id: u32) -> @builtin(position) vec4<f32> 
 @group(0) @binding(0) var scene_tex: texture_2d<f32>;
 @group(0) @binding(1) var bloom_tex: texture_2d<f32>;
 @group(0) @binding(2) var tex_sampler: sampler;
-@group(0) @binding(3) var<uniform> intensity: f32;
+@group(0) @binding(3) var<uniform> intensity_uniform: f32;
 
 @fragment
 fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
@@ -28,6 +28,12 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     // Sample bloom texture
     let bloom_color = textureSample(bloom_tex, tex_sampler, tex_coord);
     
-    // Combine scene with bloom effect
-    return scene_color + bloom_color * intensity;
+    // Calculate scene brightness for adaptive bloom
+    let luminance = dot(scene_color.rgb, vec3<f32>(0.2126, 0.7152, 0.0722));
+    
+    // Stronger bloom for brighter areas
+    let adaptive_intensity = mix(0.2, 1.5, smoothstep(0.5, 0.9, luminance));
+    
+    // Combine scene with bloom effect using brightness-based intensity
+    return scene_color + bloom_color * intensity_uniform * adaptive_intensity;
 }
