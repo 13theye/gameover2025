@@ -4,6 +4,7 @@ use nannou::prelude::*;
 use std::{collections::HashMap, time::Instant};
 use tacit_gameover::{
     config::*,
+    post::PostProcessing,
     views::{BackgroundManager, BoardInstance, PlayerInput},
 };
 
@@ -27,6 +28,7 @@ struct Model {
 
     texture: wgpu::Texture,
     texture_reshaper: wgpu::TextureReshaper,
+    post_processing: PostProcessing,
 
     // FPS
     last_update: Instant,
@@ -80,6 +82,12 @@ fn model(app: &App) -> Model {
     let draw_renderer = nannou::draw::RendererBuilder::new()
         .build_from_texture_descriptor(device, texture.descriptor());
     let sample_count = window.msaa_samples();
+    let post_processing = PostProcessing::new(
+        device,
+        config.rendering.texture_width,
+        config.rendering.texture_height,
+        config.rendering.texture_samples,
+    );
 
     // Create the texture reshaper.
     let texture_view = texture.view().build();
@@ -109,6 +117,7 @@ fn model(app: &App) -> Model {
         draw_renderer,
         texture,
         texture_reshaper,
+        post_processing,
 
         last_update: Instant::now(),
         fps: 0.0,
@@ -172,8 +181,8 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     if model.verbose {
         draw_fps(model);
     }
-    // Render to texture and handle frame recording
-    render_and_capture(app, model);
+
+    render_and_post(app, model);
 }
 
 fn view(_app: &App, model: &Model, frame: Frame) {
@@ -207,8 +216,25 @@ fn key_pressed(app: &App, model: &mut Model, key: Key) {
 }
 
 // ******************************* Rendering and Capture *****************************
+fn render_and_post(app: &App, model: &mut Model) {
+    // Get the window device and queue
+    let window = app.main_window();
+    let device = window.device();
+    let queue = window.queue();
 
-fn render_and_capture(app: &App, model: &mut Model) {
+    // Process the scene with post-processing
+    let texture_view = model.texture.view().build();
+    model.post_processing.process(
+        device,
+        queue,
+        &texture_view,
+        &mut model.draw_renderer,
+        &model.draw,
+    );
+}
+
+// Old render funciton kept here for reference
+fn _render_and_capture(app: &App, model: &mut Model) {
     let window = app.main_window();
     let device = window.device();
     let ce_desc = wgpu::CommandEncoderDescriptor {

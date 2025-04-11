@@ -29,6 +29,7 @@ pub enum GameState {
     Paused,
 }
 
+#[derive(PartialEq)]
 pub enum PlayerInput {
     L,
     R,
@@ -43,7 +44,8 @@ pub struct BoardInstance {
     pub location: Vec2, // screen location of the BoardInstance
     pub cell_size: f32, // size of the grid cells
 
-    color: Rgba, // color of cells
+    color: Rgba,          // color of cells
+    boundary_color: Rgba, // color of outer boundary
 
     game_state: GameState,              // state of the game loops
     prev_game_state: Option<GameState>, // used to come back from pause, for example
@@ -63,13 +65,17 @@ impl BoardInstance {
         gravity_interval: f32,
         lock_delay: f32,
     ) -> Self {
+        let boundary_color = rgba(0.22, 0.902, 0.082, 1.0);
+        let piece_color = rgba(0.235, 0.851, 0.11, 1.0);
+
         Self {
             id: id.to_owned(),
             board: Board::new(width, height),
             location,
             cell_size,
 
-            color: rgba(0.51, 0.81, 0.94, 1.0),
+            color: piece_color,
+            boundary_color,
 
             game_state: GameState::Ready,
             prev_game_state: None,
@@ -174,7 +180,7 @@ impl BoardInstance {
             GameState::Paused => {
                 // Pause the game
                 if let Some(input) = input {
-                    self.handle_input(input);
+                    self.handle_pause_input(input);
                 }
             }
         }
@@ -219,7 +225,9 @@ impl BoardInstance {
 
     fn clear_rows(&mut self, rows: &[isize]) {
         self.board.clear_rows(rows);
-        print_col_score(self.board.col_score_all());
+        if DEBUG {
+            print_col_score(self.board.col_score_all());
+        }
     }
 
     /************************ Piece movement methods ************************/
@@ -349,6 +357,13 @@ impl BoardInstance {
         }
     }
 
+    fn handle_pause_input(&mut self, input: &PlayerInput) {
+        // ignore everything except Pause
+        if *input == PlayerInput::Pause {
+            self.handle_pause();
+        }
+    }
+
     fn handle_pause(&mut self) {
         if self.game_state == GameState::Paused {
             // Exiting pause state
@@ -366,8 +381,7 @@ impl BoardInstance {
     /************************ Drawing methods *******************************/
 
     pub fn draw(&self, draw: &Draw) {
-        // Draw the board and active piece
-
+        // Draw the board
         for y in 0..self.board.height {
             for x in 0..self.board.width {
                 let pos = BoardPosition { x, y };
@@ -379,6 +393,7 @@ impl BoardInstance {
             }
         }
 
+        // Draw the active piece
         if let Some(piece) = &self.active_piece {
             for &(dx, dy) in piece.cells() {
                 let pos = BoardPosition {
@@ -404,27 +419,28 @@ impl BoardInstance {
             self.draw_clear_animation(draw);
         }
 
+        // Draw boundary around the board
         self.draw_boundary(draw);
     }
 
     fn draw_cell(&self, draw: &Draw, pos: BoardPosition, color: Rgba) {
         // Draw block
         draw.rect()
-            .stroke_weight(1.0)
-            .stroke(BLACK)
             .xy(pos.to_screen(self))
             .w_h(self.cell_size, self.cell_size) // cell size
-            .color(color); // color
+            .color(color) // color
+            .stroke_weight(1.5)
+            .stroke(BLACK);
     }
 
     fn draw_unfilled_cell(&self, draw: &Draw, pos: BoardPosition) {
         // Draw block
         draw.rect()
-            .stroke_weight(1.0)
-            .stroke(WHITE)
             .xy(pos.to_screen(self))
             .w_h(self.cell_size, self.cell_size) // cell size
-            .color(BLACK); // color
+            .color(BLACK) // color
+            .stroke_weight(1.5)
+            .stroke(WHITE);
     }
 
     fn draw_clear_animation(&self, draw: &Draw) {
@@ -469,33 +485,19 @@ impl BoardInstance {
             draw.rect()
                 .x_y(self.location.x, center_y)
                 .w_h(board_width, clear_height)
-                .color(rgba(0.0, 0.0, 0.0, 0.8));
+                .color(rgba(1.0, 1.0, 1.0, 0.5));
         }
 
         // Draw top and bottom lines
-        for (y_pos, trail_dir) in [(top_y, 1.0), (bottom_y, -1.0)] {
+        for y_pos in [top_y, bottom_y] {
             // Main line
             draw.line()
                 .points(
                     vec2(board_left_edge, y_pos),
                     vec2(board_left_edge + board_width, y_pos),
                 )
-                .color(rgba(1.0, 1.0, 1.0, 1.0))
+                .color(rgba(1.0, 1.0, 1.0, 0.5))
                 .stroke_weight(1.0);
-
-            // Bloom trail
-            for i in 1..=8 {
-                let offset = i as f32 * trail_dir;
-                let alpha = 0.5 - (i as f32 * 0.04);
-
-                draw.line()
-                    .points(
-                        vec2(board_left_edge, y_pos - offset),
-                        vec2(board_left_edge + board_width, y_pos - offset),
-                    )
-                    .color(rgba(1.0, 1.0, 1.0, alpha))
-                    .stroke_weight(1.0);
-            }
         }
     }
 
@@ -507,7 +509,7 @@ impl BoardInstance {
                 self.board.height as f32 * self.cell_size,
             )
             .stroke_weight(1.0)
-            .stroke_color(self.color)
+            .stroke_color(self.boundary_color)
             .color(rgba(0.0, 0.0, 0.0, 0.0));
     }
 

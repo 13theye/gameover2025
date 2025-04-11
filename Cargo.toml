@@ -9,6 +9,8 @@ nannou = "0.19"
 nannou_osc = "0.19.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
+bytemuck = "1.13.1"
+wgpu-types = "0.17.0"
 
 [lib]
 name = "tacit_gameover"
