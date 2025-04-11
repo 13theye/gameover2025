@@ -138,6 +138,87 @@ impl Board {
             .unwrap_or(false)
     }
 
+    /************************ Row clearing functions ***************************/
+
+    pub fn clear_rows(&mut self, rows: &[isize]) {
+        // Sort rows in descending order
+        let mut sorted_rows = rows.to_vec();
+        sorted_rows.sort_by(|a, b| b.cmp(a));
+
+        // Clear each row
+        for &row in sorted_rows.iter() {
+            self.clear_row(row);
+        }
+
+        // Slide rows down, starting from lowest cleared row
+        if let Some(&lowest_row) = sorted_rows.last() {
+            self.slide_rows_down(lowest_row, sorted_rows.len() as isize);
+            self.adjust_column_heights(lowest_row);
+        }
+    }
+
+    fn clear_row(&mut self, row: isize) {
+        for x in 0..self.width {
+            if let Some(idx) = self.idx(x, row) {
+                self.state.grid[idx] = false;
+            }
+        }
+
+        if row >= 0 && row < self.height {
+            self.state.reset_row_score(row);
+        }
+    }
+
+    fn slide_rows_down(&mut self, start_row: isize, count: isize) {
+        for y in (start_row + 1)..self.height {
+            for x in 0..self.width {
+                let target_y = y - count;
+
+                if target_y >= 0 {
+                    let source_cell = self.is_cell_filled(BoardPosition { x, y });
+
+                    // Update target cell
+                    if let Some(idx) = self.idx(x, target_y) {
+                        self.state.grid[idx] = source_cell;
+                    }
+                }
+            }
+
+            // Update row score
+            if y < self.height && (y - count) >= 0 {
+                self.state.row_score[(y - count) as usize] = self.state.row_score[y as usize];
+            }
+        }
+
+        // Clear the top rows that were moved down
+        for y in (self.height - count)..self.height {
+            if y >= 0 {
+                self.clear_row(y);
+            }
+        }
+    }
+
+    fn adjust_column_heights(&mut self, lowest_cleared_row: isize) {
+        for x in 0..self.width as usize {
+            // Only recalculate if the column had a non-zero height
+            if self.state.col_score[x] > 0 {
+                // Start from the previous height or the lowest cleared row, whichever is higher
+                let start_y = std::cmp::max(self.state.col_score[x] - 1, lowest_cleared_row);
+
+                // Find the new highest cell by scanning downward
+                let mut new_height = 0;
+                for y in (0..=start_y).rev() {
+                    if self.is_cell_filled(BoardPosition { x: x as isize, y }) {
+                        new_height = y + 1;
+                        break;
+                    }
+                }
+
+                self.state.col_score[x] = new_height;
+            }
+        }
+    }
+
     /************************ Geometry functions *******************************/
 
     pub fn midpoint_x(&self) -> isize {
@@ -158,7 +239,7 @@ impl Board {
         Some((y * self.width + x) as usize)
     }
 
-    fn de_idx(&self, index: usize) -> Option<(isize, isize)> {
+    fn _de_idx(&self, index: usize) -> Option<(isize, isize)> {
         if index >= self.state.grid.len() {
             return None;
         }
@@ -204,6 +285,10 @@ impl BoardState {
         }
     }
 
+    pub fn reset_row_score(&mut self, row: isize) {
+        self.row_score[row as usize] = 0;
+    }
+
     pub fn update_row_score(&mut self, pos: BoardPosition) -> isize {
         let score = &mut self.row_score[pos.y as usize];
         *score += 1;
@@ -213,7 +298,6 @@ impl BoardState {
     pub fn update_col_score(&mut self, pos: BoardPosition) {
         if pos.y >= self.col_score[pos.x as usize] {
             self.col_score[pos.x as usize] = pos.y + 1;
-            println!("Updating row [{}] col score to: {}", pos.x, pos.y);
         }
     }
 }

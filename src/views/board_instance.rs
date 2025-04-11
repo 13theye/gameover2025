@@ -154,6 +154,12 @@ impl BoardInstance {
                 }
 
                 if self.timers.clear_animation.tick(dt) {
+                    // Animation done, now update the model
+                    if let Some(rows) = self.rows_to_clear.take() {
+                        self.clear_rows(&rows)
+                    }
+
+                    // Reset timer and return to Ready state
                     self.timers.clear_animation.reset();
                     self.game_state = GameState::Ready;
                 }
@@ -211,10 +217,9 @@ impl BoardInstance {
             .and_then(|piece| self.board.commit_piece(&piece))
     }
 
-    fn clear_lines(&mut self, rows: Vec<isize>) {
-        for row in rows {
-            println!("Clearing row {}", row);
-        }
+    fn clear_rows(&mut self, rows: &[isize]) {
+        self.board.clear_rows(rows);
+        print_col_score(self.board.col_score_all());
     }
 
     /************************ Piece movement methods ************************/
@@ -479,14 +484,14 @@ impl BoardInstance {
                 .stroke_weight(1.0);
 
             // Bloom trail
-            for i in 1..=5 {
+            for i in 1..=8 {
                 let offset = i as f32 * trail_dir;
-                let alpha = 0.2 - (i as f32 * 0.04);
+                let alpha = 0.5 - (i as f32 * 0.04);
 
                 draw.line()
                     .points(
-                        vec2(board_left_edge, y_pos + offset),
-                        vec2(board_left_edge + board_width, y_pos + offset),
+                        vec2(board_left_edge, y_pos - offset),
+                        vec2(board_left_edge + board_width, y_pos - offset),
                     )
                     .color(rgba(1.0, 1.0, 1.0, alpha))
                     .stroke_weight(1.0);
