@@ -6,7 +6,7 @@
 width = 16
 height = 24
 # grid block size in screen pts (float):
-cell_size = 25.0
+cell_size = 30.0
 # initial time between gravity steps (float):
 gravity_interval = 0.5
 # initial time before piece locks into place (float):

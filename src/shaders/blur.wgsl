@@ -31,7 +31,7 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     let base_brightness = max(center_pixel.a, length(center_pixel.rgb) * 0.5);
     
     // Dynamic blur parameters based on brightness
-    let base_radius = 3.0;
+    let base_radius = 4.5;
     
     // Scale radius with brightness (non-linear scaling for more dramatic effect)
     let brightness_factor = pow(base_brightness, adaptive_scaling); // Non-linear scaling

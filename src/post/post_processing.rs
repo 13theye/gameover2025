@@ -108,7 +108,7 @@ impl PostProcessing {
         });
 
         // Bloom intensity
-        let bloom_intensity = 0.8f32;
+        let bloom_intensity = 0.9f32;
         let intensity_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Intensity Buffer"),
             contents: bytemuck::cast_slice(&[bloom_intensity]),
@@ -124,7 +124,7 @@ impl PostProcessing {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
-        let max_blur_radius = 10.0f32;
+        let max_blur_radius = 15.0f32;
         let max_radius_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Max Radius Buffer"),
             contents: bytemuck::cast_slice(&[max_blur_radius]),

@@ -65,7 +65,7 @@ impl BoardInstance {
         gravity_interval: f32,
         lock_delay: f32,
     ) -> Self {
-        let boundary_color = rgba(0.235, 0.851, 0.11, 1.0);
+        let boundary_color = rgba(0.22, 0.902, 0.082, 1.0);
         let piece_color = rgba(0.235, 0.851, 0.11, 1.0);
 
         Self {
@@ -381,8 +381,7 @@ impl BoardInstance {
     /************************ Drawing methods *******************************/
 
     pub fn draw(&self, draw: &Draw) {
-        // Draw the board and active piece
-
+        // Draw the board
         for y in 0..self.board.height {
             for x in 0..self.board.width {
                 let pos = BoardPosition { x, y };
@@ -394,6 +393,7 @@ impl BoardInstance {
             }
         }
 
+        // Draw the active piece
         if let Some(piece) = &self.active_piece {
             for &(dx, dy) in piece.cells() {
                 let pos = BoardPosition {
@@ -419,27 +419,28 @@ impl BoardInstance {
             self.draw_clear_animation(draw);
         }
 
+        // Draw boundary around the board
         self.draw_boundary(draw);
     }
 
     fn draw_cell(&self, draw: &Draw, pos: BoardPosition, color: Rgba) {
         // Draw block
         draw.rect()
-            .stroke_weight(1.0)
-            .stroke(BLACK)
             .xy(pos.to_screen(self))
             .w_h(self.cell_size, self.cell_size) // cell size
-            .color(color); // color
+            .color(color) // color
+            .stroke_weight(1.5)
+            .stroke(BLACK);
     }
 
     fn draw_unfilled_cell(&self, draw: &Draw, pos: BoardPosition) {
         // Draw block
         draw.rect()
-            .stroke_weight(1.0)
-            .stroke(WHITE)
             .xy(pos.to_screen(self))
             .w_h(self.cell_size, self.cell_size) // cell size
-            .color(BLACK); // color
+            .color(BLACK) // color
+            .stroke_weight(1.5)
+            .stroke(WHITE);
     }
 
     fn draw_clear_animation(&self, draw: &Draw) {
