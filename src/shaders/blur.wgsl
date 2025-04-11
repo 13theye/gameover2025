@@ -15,14 +15,28 @@ fn vs_main(@builtin(vertex_index) vert_id: u32) -> @builtin(position) vec4<f32> 
 @group(0) @binding(0) var tex: texture_2d<f32>;
 @group(0) @binding(1) var tex_sampler: sampler;
 @group(0) @binding(2) var<uniform> direction: vec2<f32>; // (1,0) or (0,1)
+@group(0) @binding(3) var<uniform> adaptive_scaling: f32;
+@group(0) @binding(4) var<uniform> max_radius: f32;
 
 @fragment
 fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     let tex_size = vec2<f32>(textureDimensions(tex));
     let tex_coord = pos.xy / tex_size;
     
-    // Blur parameters
-    let blur_radius = 8.0;
+    // Get the center pixel to determine base brightness
+    let center_pixel = textureSample(tex, tex_sampler, tex_coord);
+    
+    // Base brightness is stored in alpha from brightness pass
+    // For vertical pass, we need to estimate from color intensity
+    let base_brightness = max(center_pixel.a, length(center_pixel.rgb) * 0.5);
+    
+    // Dynamic blur parameters based on brightness
+    let base_radius = 3.0;
+    
+    // Scale radius with brightness (non-linear scaling for more dramatic effect)
+    let brightness_factor = pow(base_brightness, adaptive_scaling); // Non-linear scaling
+    let blur_radius = mix(base_radius, max_radius, brightness_factor);
+    
     let sigma = blur_radius / 2.0;
     
     // Gaussian blur calculation
@@ -44,5 +58,8 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     }
     
     // Normalize by weight sum
-    return result / weight_sum;
+    // Preserve our brightness information in alpha for the next stage
+    var normalized = result / weight_sum;
+    normalized.a = base_brightness; // Pass brightness information to next stage
+    return normalized;
 }

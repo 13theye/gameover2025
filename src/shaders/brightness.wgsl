@@ -28,14 +28,15 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     
     // Apply threshold with smooth transition
     let threshold = threshold_uniform;
-    let knee = 0.1; // Softness of the threshold
+    let knee = 0.15; // Increased softness of the threshold
     
     // Soft thresholding
     let brightness = smoothstep(threshold - knee, threshold + knee, luminance);
     
-    // Adaptive intensity - brighter pixels bloom more intensely
-    let intensity = pow(brightness, 2.0); // Square for stronger effect on bright areas
+    // Enhanced adaptive intensity - brighter pixels bloom more intensely
+    // Store original brightness in alpha for later stages
+    let intensity = pow(brightness, 1.5); // Reduced power for wider bloom range
     
-    // Apply to color
-    return vec4<f32>(color.rgb * intensity, color.a);
+    // Apply to color and store original brightness in alpha
+    return vec4<f32>(color.rgb * intensity, brightness);
 }

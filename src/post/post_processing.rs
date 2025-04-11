@@ -1,6 +1,6 @@
 // src/post/post_processing.rs
 //
-// Apply post-effects (bloom) to the rendered texture
+// Texture rendering and post-processing
 
 use nannou::prelude::*;
 use nannou::wgpu;
@@ -26,9 +26,13 @@ pub struct PostProcessing {
     blur_pipeline: wgpu::RenderPipeline,
     composite_pipeline: wgpu::RenderPipeline,
 
+    // Adaptive bloom
+    pub adaptive_blur_scaling: f32,
+    pub max_blur_radius: f32,
+    pub intensity_curve: f32,
+
     // Pipeline parameters
     pub brightness_threshold: f32,
-    pub blur_radius: f32,
     pub bloom_intensity: f32,
 
     // Shader bind groups
@@ -45,6 +49,10 @@ pub struct PostProcessing {
     blur_h_buffer: wgpu::Buffer,
     blur_v_buffer: wgpu::Buffer,
     intensity_buffer: wgpu::Buffer,
+
+    adaptive_scaling_buffer: wgpu::Buffer,
+    max_radius_buffer: wgpu::Buffer,
+    intensity_curve_buffer: wgpu::Buffer,
 }
 
 impl PostProcessing {
@@ -104,6 +112,29 @@ impl PostProcessing {
         let intensity_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Intensity Buffer"),
             contents: bytemuck::cast_slice(&[bloom_intensity]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // Additional buffers for adaptive bloom
+        let adaptive_blur_scaling = 1.2f32;
+        let adaptive_scaling_buffer =
+            device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("Adaptive Scaling Buffer"),
+                contents: bytemuck::cast_slice(&[adaptive_blur_scaling]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            });
+
+        let max_blur_radius = 10.0f32;
+        let max_radius_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Max Radius Buffer"),
+            contents: bytemuck::cast_slice(&[max_blur_radius]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let intensity_curve = 1.5f32;
+        let intensity_curve_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Intensity Curve Buffer"),
+            contents: bytemuck::cast_slice(&[intensity_curve]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -194,6 +225,26 @@ impl PostProcessing {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3, // This would be the next available binding
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
 
@@ -233,6 +284,16 @@ impl PostProcessing {
                     // Intensity uniform binding
                     wgpu::BindGroupLayoutEntry {
                         binding: 3,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4, // This would be the next available binding
                         visibility: wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Uniform,
@@ -284,6 +345,18 @@ impl PostProcessing {
                         blur_h_buffer.as_entire_buffer_binding(),
                     ),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Buffer(
+                        adaptive_scaling_buffer.as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Buffer(
+                        max_radius_buffer.as_entire_buffer_binding(),
+                    ),
+                },
             ],
         });
 
@@ -303,6 +376,18 @@ impl PostProcessing {
                     binding: 2,
                     resource: wgpu::BindingResource::Buffer(
                         blur_v_buffer.as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: wgpu::BindingResource::Buffer(
+                        adaptive_scaling_buffer.as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Buffer(
+                        max_radius_buffer.as_entire_buffer_binding(),
                     ),
                 },
             ],
@@ -328,6 +413,12 @@ impl PostProcessing {
                     binding: 3,
                     resource: wgpu::BindingResource::Buffer(
                         intensity_buffer.as_entire_buffer_binding(),
+                    ),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::Buffer(
+                        intensity_curve_buffer.as_entire_buffer_binding(),
                     ),
                 },
             ],
@@ -399,9 +490,17 @@ impl PostProcessing {
             blur_h_buffer,
             blur_v_buffer,
             intensity_buffer,
-            brightness_threshold: 0.7,
-            blur_radius: 5.0,
-            bloom_intensity: 0.6,
+
+            adaptive_scaling_buffer,
+            max_radius_buffer,
+            intensity_curve_buffer,
+
+            brightness_threshold,
+            bloom_intensity,
+            adaptive_blur_scaling,
+            max_blur_radius,
+            intensity_curve,
+
             brightness_bind_group,
             blur_h_bind_group,
             blur_v_bind_group,
@@ -553,7 +652,8 @@ impl PostProcessing {
         device.poll(wgpu::Maintain::Wait);
     }
 
-    // Helper methods for updating parameters
+    /******************* Helper methods for updating parameters ****************** */
+
     pub fn set_brightness_threshold(&mut self, queue: &wgpu::Queue, threshold: f32) {
         self.brightness_threshold = threshold;
         queue.write_buffer(
@@ -563,17 +663,35 @@ impl PostProcessing {
         );
     }
 
-    pub fn set_blur_radius(&mut self, _queue: &wgpu::Queue, radius: f32) {
-        self.blur_radius = radius;
-        // We'd typically update a uniform buffer here if the blur shader used a separate radius parameter
-    }
-
     pub fn set_bloom_intensity(&mut self, queue: &wgpu::Queue, intensity: f32) {
         self.bloom_intensity = intensity;
         queue.write_buffer(
             &self.intensity_buffer,
             0,
             bytemuck::cast_slice(&[intensity]),
+        );
+    }
+
+    pub fn set_adaptive_blur_scaling(&mut self, queue: &wgpu::Queue, scaling: f32) {
+        self.adaptive_blur_scaling = scaling;
+        queue.write_buffer(
+            &self.adaptive_scaling_buffer,
+            0,
+            bytemuck::cast_slice(&[scaling]),
+        );
+    }
+
+    pub fn set_max_blur_radius(&mut self, queue: &wgpu::Queue, radius: f32) {
+        self.max_blur_radius = radius;
+        queue.write_buffer(&self.max_radius_buffer, 0, bytemuck::cast_slice(&[radius]));
+    }
+
+    pub fn set_intensity_curve(&mut self, queue: &wgpu::Queue, curve: f32) {
+        self.intensity_curve = curve;
+        queue.write_buffer(
+            &self.intensity_curve_buffer,
+            0,
+            bytemuck::cast_slice(&[curve]),
         );
     }
 }

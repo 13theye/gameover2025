@@ -65,8 +65,8 @@ impl BoardInstance {
         gravity_interval: f32,
         lock_delay: f32,
     ) -> Self {
-        let boundary_color = rgba(0.196, 0.969, 0.114, 1.0);
-        let piece_color = rgba(0.30, 0.85, 0.24, 1.0);
+        let boundary_color = rgba(0.235, 0.851, 0.11, 1.0);
+        let piece_color = rgba(0.235, 0.851, 0.11, 1.0);
 
         Self {
             id: id.to_owned(),
@@ -484,7 +484,7 @@ impl BoardInstance {
             draw.rect()
                 .x_y(self.location.x, center_y)
                 .w_h(board_width, clear_height)
-                .color(rgba(1.0, 1.0, 1.0, 0.8));
+                .color(rgba(1.0, 1.0, 1.0, 0.5));
         }
 
         // Draw top and bottom lines
@@ -495,7 +495,7 @@ impl BoardInstance {
                     vec2(board_left_edge, y_pos),
                     vec2(board_left_edge + board_width, y_pos),
                 )
-                .color(rgba(1.0, 1.0, 1.0, 0.8))
+                .color(rgba(1.0, 1.0, 1.0, 0.5))
                 .stroke_weight(1.0);
         }
     }
