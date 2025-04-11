@@ -4,6 +4,7 @@
 
 use crate::{
     models::{Board, PieceType, PlaceResult},
+    utils::Timer,
     views::{BoardPosition, PieceInstance, RotationDirection},
 };
 use nannou::{
@@ -13,6 +14,10 @@ use nannou::{
 
 // helps visualize grid for debugging
 const DEBUG: bool = true;
+
+// hard-coded animation timers
+const CLEAR_DURATION: f32 = 0.15;
+const SLIDE_DURATION: f32 = 0.15;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum GameState {
@@ -44,15 +49,11 @@ pub struct BoardInstance {
 
     color: Rgba, // color of cells
 
-    game_state: GameState,
+    game_state: GameState,              // state of the game loops
     prev_game_state: Option<GameState>, // used to come back from pause, for example
-    pause_state: Option<PauseState>,    // timers that are saved when pausing
+    timers: GameTimers,                 // timers used in the game
 
-    active_piece: Option<PieceInstance>,
-    gravity_interval: f32, // time between gravity steps
-    gravity_timer: f32,
-    lock_delay: f32, // time before piece locks into place
-    lock_timer: f32,
+    active_piece: Option<PieceInstance>, // the currently active piece
 }
 
 impl BoardInstance {
@@ -75,13 +76,9 @@ impl BoardInstance {
 
             game_state: GameState::Ready,
             prev_game_state: None,
-            pause_state: None,
+            timers: GameTimers::new(gravity_interval, lock_delay, CLEAR_DURATION, SLIDE_DURATION),
 
             active_piece: None,
-            gravity_interval,
-            gravity_timer: 0.0,
-            lock_delay,
-            lock_timer: 0.0,
         }
     }
 
@@ -106,12 +103,8 @@ impl BoardInstance {
                 }
 
                 // Drop the piece 1 cell per gravity_interval
-                self.gravity_timer += dt;
-                if self.gravity_timer >= self.gravity_interval {
-                    self.gravity_timer = 0.0;
-                    if !self.apply_gravity() {
-                        self.game_state = GameState::Locking;
-                    }
+                if self.timers.gravity.tick(dt) && !self.apply_gravity() {
+                    self.game_state = GameState::Locking;
                 }
             }
 
@@ -131,17 +124,14 @@ impl BoardInstance {
                     if self.board.try_place(piece, next_pos) == PlaceResult::PlaceOk {
                         piece.position = next_pos;
                         // Reset timers when piece moves
-                        self.lock_timer = 0.0;
-                        self.gravity_timer = 0.0;
+                        self.timers.lock.reset();
+                        self.timers.gravity.reset();
                         self.game_state = GameState::Falling;
                     }
                 }
 
                 // Lock the piece, commit, check for lines, return to Ready state.
-                self.lock_timer += dt;
-                if self.lock_timer >= self.lock_delay {
-                    self.lock_timer = 0.0;
-
+                if self.timers.lock.tick(dt) {
                     if let Some(filled_rows) = self.commit_piece() {
                         self.clear_lines(filled_rows);
                     }
@@ -338,24 +328,13 @@ impl BoardInstance {
         if self.game_state == GameState::Paused {
             // Exiting pause state
             self.game_state = self.prev_game_state.take().unwrap_or(GameState::Ready);
-
+            self.timers.resume_all();
             // Restore timers if pause state exists
-            if let Some(PauseState {
-                gravity_timer,
-                lock_timer,
-            }) = self.pause_state.take()
-            {
-                self.gravity_timer = gravity_timer;
-                self.lock_timer = lock_timer;
-            }
         } else {
             // Entering pause state
             self.prev_game_state = Some(self.game_state);
-            self.pause_state = Some(PauseState {
-                gravity_timer: self.gravity_timer,
-                lock_timer: self.lock_timer,
-            });
             self.game_state = GameState::Paused;
+            self.timers.pause_all();
         }
     }
 
@@ -442,4 +421,41 @@ fn spawn_new_piece_msg(piece: &PieceInstance) {
 fn print_col_score(col_score: &Vec<isize>) {
     println!("\nCol heights:");
     println!("{:?}", col_score);
+}
+
+struct GameTimers {
+    gravity: Timer,
+    lock: Timer,
+    clear_animation: Timer,
+    slide_animation: Timer,
+}
+
+impl GameTimers {
+    pub fn new(
+        gravity_interval: f32,
+        lock_delay: f32,
+        clear_duration: f32,
+        slide_duration: f32,
+    ) -> Self {
+        Self {
+            gravity: Timer::new(gravity_interval),
+            lock: Timer::new(lock_delay),
+            clear_animation: Timer::new(clear_duration),
+            slide_animation: Timer::new(slide_duration),
+        }
+    }
+
+    pub fn pause_all(&mut self) {
+        self.gravity.pause();
+        self.lock.pause();
+        self.clear_animation.pause();
+        self.slide_animation.pause();
+    }
+
+    pub fn resume_all(&mut self) {
+        self.gravity.resume();
+        self.lock.resume();
+        self.clear_animation.resume();
+        self.slide_animation.resume();
+    }
 }
