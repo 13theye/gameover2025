@@ -2067,10 +2067,12 @@ dependencies = [
 name = "tacit-gameover"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "nannou",
  "nannou_osc",
  "serde",
  "toml 0.8.20",
+ "wgpu-types",
 ]
 
 [[package]]

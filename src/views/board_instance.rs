@@ -44,7 +44,8 @@ pub struct BoardInstance {
     pub location: Vec2, // screen location of the BoardInstance
     pub cell_size: f32, // size of the grid cells
 
-    color: Rgba, // color of cells
+    color: Rgba,          // color of cells
+    boundary_color: Rgba, // color of outer boundary
 
     game_state: GameState,              // state of the game loops
     prev_game_state: Option<GameState>, // used to come back from pause, for example
@@ -64,13 +65,17 @@ impl BoardInstance {
         gravity_interval: f32,
         lock_delay: f32,
     ) -> Self {
+        let boundary_color = rgba(0.196, 0.969, 0.114, 1.0);
+        let piece_color = rgba(0.30, 0.85, 0.24, 1.0);
+
         Self {
             id: id.to_owned(),
             board: Board::new(width, height),
             location,
             cell_size,
 
-            color: rgba(0.51, 0.81, 0.94, 1.0),
+            color: piece_color,
+            boundary_color,
 
             game_state: GameState::Ready,
             prev_game_state: None,
@@ -479,7 +484,7 @@ impl BoardInstance {
             draw.rect()
                 .x_y(self.location.x, center_y)
                 .w_h(board_width, clear_height)
-                .color(rgba(0.0, 0.0, 0.0, 0.8));
+                .color(rgba(1.0, 1.0, 1.0, 0.2));
         }
 
         // Draw top and bottom lines
@@ -490,9 +495,9 @@ impl BoardInstance {
                     vec2(board_left_edge, y_pos),
                     vec2(board_left_edge + board_width, y_pos),
                 )
-                .color(rgba(1.0, 1.0, 1.0, 1.0))
+                .color(rgba(1.0, 1.0, 1.0, 0.2))
                 .stroke_weight(1.0);
-
+            /*
             // Bloom trail
             for i in 1..=8 {
                 let offset = i as f32 * trail_dir;
@@ -506,6 +511,7 @@ impl BoardInstance {
                     .color(rgba(1.0, 1.0, 1.0, alpha))
                     .stroke_weight(1.0);
             }
+            */
         }
     }
 
@@ -517,7 +523,7 @@ impl BoardInstance {
                 self.board.height as f32 * self.cell_size,
             )
             .stroke_weight(1.0)
-            .stroke_color(self.color)
+            .stroke_color(self.boundary_color)
             .color(rgba(0.0, 0.0, 0.0, 0.0));
     }
 
