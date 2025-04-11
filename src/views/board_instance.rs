@@ -13,7 +13,7 @@ use nannou::{
 };
 
 // helps visualize grid for debugging
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 // hard-coded animation timers
 const CLEAR_DURATION: f32 = 0.5;
@@ -36,6 +36,8 @@ pub enum PlayerInput {
     HardDrop,
     Rotate,
     Pause,
+    SaveState,
+    ResumeState,
 }
 
 pub struct BoardInstance {
@@ -354,13 +356,27 @@ impl BoardInstance {
             PlayerInput::Pause => {
                 self.handle_pause();
             }
+            _ => {}
         }
     }
 
     fn handle_pause_input(&mut self, input: &PlayerInput) {
         // ignore everything except Pause
-        if *input == PlayerInput::Pause {
-            self.handle_pause();
+        match input {
+            PlayerInput::Pause => {
+                self.handle_pause();
+            }
+            PlayerInput::SaveState => {
+                self.board.save_state();
+                self.active_piece = None;
+                self.game_state = GameState::Ready
+            }
+            PlayerInput::ResumeState => {
+                self.board.resume_state();
+                self.active_piece = None;
+                self.game_state = GameState::Ready
+            }
+            _ => {}
         }
     }
 

@@ -203,6 +203,8 @@ fn key_pressed(app: &App, model: &mut Model, key: Key) {
         Key::Up => model.player_input = Some(PlayerInput::Rotate),
         Key::Space => model.player_input = Some(PlayerInput::HardDrop),
         Key::Return => model.player_input = Some(PlayerInput::Pause),
+        Key::Key1 => model.player_input = Some(PlayerInput::SaveState),
+        Key::Key2 => model.player_input = Some(PlayerInput::ResumeState),
 
         Key::G => {
             model.make_board("board", vec2(0.0, 0.0));

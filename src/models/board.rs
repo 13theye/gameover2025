@@ -16,6 +16,7 @@ pub struct Board {
     pub width: isize,  // the overall width in cells
     pub height: isize, // the overall height in cells
     state: BoardState, // the grid state
+    saved_state: Option<BoardState>,
 }
 
 impl Board {
@@ -24,6 +25,7 @@ impl Board {
             width: width as isize,
             height: height as isize,
             state: BoardState::new(width, height),
+            saved_state: None,
         }
     }
 
@@ -266,6 +268,16 @@ impl Board {
 
     pub fn col_score_all(&self) -> &Vec<isize> {
         &self.state.col_score
+    }
+
+    pub fn save_state(&mut self) {
+        self.saved_state = Some(self.state.clone());
+    }
+
+    pub fn resume_state(&mut self) {
+        if let Some(state) = &self.saved_state {
+            self.state = state.clone();
+        }
     }
 }
 
