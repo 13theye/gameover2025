@@ -13,7 +13,7 @@ use nannou::{
 };
 
 // helps visualize grid for debugging
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 
 // hard-coded animation timers
 const CLEAR_DURATION: f32 = 0.5;
@@ -398,6 +398,8 @@ impl BoardInstance {
         if effective_state == GameState::Clearing {
             self.draw_clear_animation(draw);
         }
+
+        self.draw_boundary(draw);
     }
 
     fn draw_cell(&self, draw: &Draw, pos: BoardPosition, color: Rgba) {
@@ -427,79 +429,81 @@ impl BoardInstance {
 
         let progress = self.timers.clear_animation.progress();
 
-        let top_row = rows.iter().max().unwrap_or(&0);
-        let bottom_row = rows.iter().min().unwrap_or(&0);
+        // Find row bounds
+        let top_row = *rows.iter().max().unwrap_or(&0);
+        let bottom_row = *rows.iter().min().unwrap_or(&0);
 
-        let top_bound = BoardPosition { x: 0, y: *top_row }.to_screen(self).y;
+        // Calculate clear area
+        let top_bound = BoardPosition { x: 0, y: top_row }.to_screen(self).y;
         let bottom_bound = BoardPosition {
             x: 0,
-            y: *bottom_row,
+            y: bottom_row,
         }
         .to_screen(self)
         .y;
 
         let board_left_edge = self.location.x - (self.board.width as f32 * self.cell_size / 2.0);
+        let board_width = self.board.width as f32 * self.cell_size;
 
-        let c_line_start = vec2(
-            board_left_edge,
-            bottom_bound + (top_bound - bottom_bound) / 2.0,
-        );
-        let c_line_end = c_line_start + vec2(self.board.width as f32 * self.cell_size, 0.0);
+        // Calculate separation based on progress. Minimum is half a cell height.
+        let center_y = bottom_bound + (top_bound - bottom_bound) / 2.0;
+        let separation = if top_row == bottom_row {
+            progress * self.cell_size / 2.0
+        } else {
+            progress * (top_bound - bottom_bound)
+        };
 
-        // Calculate separation based on progress
-        let separation_vec = vec2(0.0, progress * (top_bound - bottom_bound));
-
-        let top_line_start = c_line_start + separation_vec;
-        let top_line_end = c_line_end + separation_vec;
-
-        let bottom_line_start = c_line_start - separation_vec;
-        let bottom_line_end = c_line_end - separation_vec;
+        // Line positions
+        let top_y = center_y + separation;
+        let bottom_y = center_y - separation;
 
         // Clear the area between the lines as they separate
         if progress > 0.1 {
             // Start clearing after a little bit of separation
-            let clear_height = (top_line_start.y - bottom_line_start.y).abs();
+            let clear_height = (top_y - bottom_y).abs();
             draw.rect()
-                .x_y(self.location.x, c_line_start.y)
-                .w_h(self.board.width as f32 * self.cell_size, clear_height)
-                .color(rgba(0.0, 0.0, 0.0, 0.8)); // Black rectangle to "clear" the area
+                .x_y(self.location.x, center_y)
+                .w_h(board_width, clear_height)
+                .color(rgba(0.0, 0.0, 0.0, 0.8));
         }
 
-        // Draw top line
-        draw.line()
-            .points(top_line_start, top_line_end)
-            .color(rgba(1.0, 1.0, 1.0, 1.0)) // Bright white
-            .stroke_weight(1.0);
-
-        // Draw bottom line
-        draw.line()
-            .points(bottom_line_start, bottom_line_end)
-            .color(rgba(1.0, 1.0, 1.0, 1.0)) // Bright white
-            .stroke_weight(1.0);
-
-        // Draw bloom trail effect
-        for i in 1..=5 {
-            let offset = i as f32 * 1.0;
-            let alpha = 0.2 - (i as f32 * 0.04); // Decreasing alpha for fading effect
-
-            // Top bloom trail
+        // Draw top and bottom lines
+        for (y_pos, trail_dir) in [(top_y, 1.0), (bottom_y, -1.0)] {
+            // Main line
             draw.line()
                 .points(
-                    pt2(top_line_start.x, top_line_start.y + offset),
-                    pt2(top_line_end.x, top_line_end.y + offset),
+                    vec2(board_left_edge, y_pos),
+                    vec2(board_left_edge + board_width, y_pos),
                 )
-                .color(rgba(1.0, 1.0, 1.0, alpha))
+                .color(rgba(1.0, 1.0, 1.0, 1.0))
                 .stroke_weight(1.0);
 
-            // Bottom bloom trail
-            draw.line()
-                .points(
-                    pt2(bottom_line_start.x, bottom_line_start.y - offset),
-                    pt2(bottom_line_end.x, bottom_line_end.y - offset),
-                )
-                .color(rgba(1.0, 1.0, 1.0, alpha))
-                .stroke_weight(1.0);
+            // Bloom trail
+            for i in 1..=5 {
+                let offset = i as f32 * trail_dir;
+                let alpha = 0.2 - (i as f32 * 0.04);
+
+                draw.line()
+                    .points(
+                        vec2(board_left_edge, y_pos + offset),
+                        vec2(board_left_edge + board_width, y_pos + offset),
+                    )
+                    .color(rgba(1.0, 1.0, 1.0, alpha))
+                    .stroke_weight(1.0);
+            }
         }
+    }
+
+    fn draw_boundary(&self, draw: &Draw) {
+        draw.rect()
+            .x_y(self.location.x, self.location.y)
+            .w_h(
+                self.board.width as f32 * self.cell_size,
+                self.board.height as f32 * self.cell_size,
+            )
+            .stroke_weight(1.0)
+            .stroke_color(self.color)
+            .color(rgba(0.0, 0.0, 0.0, 0.0));
     }
 
     /************************ Utility methods *******************************/
