@@ -4,6 +4,7 @@ use nannou::prelude::*;
 use std::{collections::HashMap, time::Instant};
 use tacit_gameover::{
     config::*,
+    post::PostProcessing,
     views::{BackgroundManager, BoardInstance, PlayerInput},
 };
 
@@ -27,6 +28,7 @@ struct Model {
 
     texture: wgpu::Texture,
     texture_reshaper: wgpu::TextureReshaper,
+    post_processing: PostProcessing,
 
     // FPS
     last_update: Instant,
@@ -109,6 +111,11 @@ fn model(app: &App) -> Model {
         draw_renderer,
         texture,
         texture_reshaper,
+        post_processing: PostProcessing::new(
+            app,
+            config.rendering.texture_width,
+            config.rendering.texture_height,
+        ),
 
         last_update: Instant::now(),
         fps: 0.0,
@@ -172,6 +179,10 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     if model.verbose {
         draw_fps(model);
     }
+
+    // Render the scene with post-processing
+    model.post_processing.process(app, &model.draw);
+
     // Render to texture and handle frame recording
     render_and_capture(app, model);
 }

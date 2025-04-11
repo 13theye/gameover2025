@@ -220,7 +220,9 @@ impl BoardInstance {
 
     fn clear_rows(&mut self, rows: &[isize]) {
         self.board.clear_rows(rows);
-        print_col_score(self.board.col_score_all());
+        if DEBUG {
+            print_col_score(self.board.col_score_all());
+        }
     }
 
     /************************ Piece movement methods ************************/
