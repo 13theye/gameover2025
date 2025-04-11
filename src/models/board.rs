@@ -16,7 +16,6 @@ pub struct Board {
     pub width: isize,  // the overall width in cells
     pub height: isize, // the overall height in cells
     state: BoardState, // the grid state
-    locked: bool,      // true when all pieces are locked
 }
 
 impl Board {
@@ -25,7 +24,6 @@ impl Board {
             width: width as isize,
             height: height as isize,
             state: BoardState::new(width, height),
-            locked: false,
         }
     }
 

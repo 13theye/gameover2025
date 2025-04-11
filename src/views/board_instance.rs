@@ -24,6 +24,7 @@ pub enum GameState {
     Ready,    // ready to spawn a new piece
     Falling,  // Piece is falling
     Locking,  // Piece has landed and is about to commit
+    Clearing, // Clearing the completed rows
     GameOver, // Game over
     Paused,
 }
@@ -34,11 +35,6 @@ pub enum PlayerInput {
     HardDrop,
     Rotate,
     Pause,
-}
-
-struct PauseState {
-    gravity_timer: f32,
-    lock_timer: f32,
 }
 
 pub struct BoardInstance {
@@ -53,6 +49,7 @@ pub struct BoardInstance {
     prev_game_state: Option<GameState>, // used to come back from pause, for example
     timers: GameTimers,                 // timers used in the game
 
+    rows_to_clear: Option<Vec<isize>>, // rows idxs for the Clearing state to clear
     active_piece: Option<PieceInstance>, // the currently active piece
 }
 
@@ -78,6 +75,7 @@ impl BoardInstance {
             prev_game_state: None,
             timers: GameTimers::new(gravity_interval, lock_delay, CLEAR_DURATION, SLIDE_DURATION),
 
+            rows_to_clear: None,
             active_piece: None,
         }
     }
@@ -87,8 +85,8 @@ impl BoardInstance {
     // Game State Machine
     pub fn update(&mut self, dt: f32, input: &Option<PlayerInput>, rng: &mut ThreadRng) {
         match self.game_state {
-            // Spawn a new piece
             GameState::Ready => {
+                // Spawn a new piece
                 if self.spawn_new_piece(rng) {
                     self.game_state = GameState::Falling;
                 } else {
@@ -96,26 +94,30 @@ impl BoardInstance {
                 }
             }
 
-            // Handle an active piece
             GameState::Falling => {
+                // Handle an active piece
+
                 if let Some(input) = input {
                     self.handle_input(input);
                 }
 
-                // Drop the piece 1 cell per gravity_interval
                 if self.timers.gravity.tick(dt) && !self.apply_gravity() {
+                    // Drop the piece 1 cell per gravity_interval
                     self.game_state = GameState::Locking;
                 }
             }
 
-            // Last-minute adjustment period for piece
             GameState::Locking => {
+                // Last-minute adjustment period for piece
+
                 if let Some(input) = input {
                     self.handle_input(input);
                 }
-                // Check if the piece can now fall
-                // because of some input during the Locking period
+
                 if let Some(piece) = self.active_piece.as_mut() {
+                    // Check if the piece can now fall
+                    // because of some input during the Locking period
+
                     let next_pos = BoardPosition {
                         x: piece.position.x,
                         y: piece.position.y - 1,
@@ -130,27 +132,32 @@ impl BoardInstance {
                     }
                 }
 
-                // Lock the piece, commit, check for lines, return to Ready state.
                 if self.timers.lock.tick(dt) {
-                    if let Some(filled_rows) = self.commit_piece() {
-                        self.clear_lines(filled_rows);
+                    // Lock the piece, commit, check for lines, return to Ready state.
+
+                    self.rows_to_clear = self.commit_piece();
+                    if self.rows_to_clear.is_some() {
+                        self.game_state = GameState::Clearing;
+                    } else {
+                        self.game_state = GameState::Ready;
                     }
 
                     if DEBUG {
                         print_col_score(self.board.col_score_all());
                     }
-
-                    self.game_state = GameState::Ready;
                 }
             }
 
-            // Grid has reached the top
+            GameState::Clearing => {}
+
             GameState::GameOver => {
+                // Grid has been filled to the top
+
                 // gameover state
             }
 
-            // Pause the game
             GameState::Paused => {
+                // Pause the game
                 if let Some(input) = input {
                     self.handle_input(input);
                 }
@@ -178,6 +185,10 @@ impl BoardInstance {
         );
 
         if can_place {
+            if DEBUG {
+                spawn_new_piece_msg(&new_piece);
+            }
+
             self.active_piece = Some(new_piece);
         }
 
