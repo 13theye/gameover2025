@@ -16,7 +16,7 @@ use nannou::{
 const DEBUG: bool = true;
 
 // hard-coded animation timers
-const CLEAR_DURATION: f32 = 0.15;
+const CLEAR_DURATION: f32 = 0.5;
 const SLIDE_DURATION: f32 = 0.15;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -39,9 +39,9 @@ pub enum PlayerInput {
 
 pub struct BoardInstance {
     pub id: String,
-    board: Board,   // the internal board logic
-    location: Vec2, // screen location of the BoardInstance
-    cell_size: f32, // size of the grid cells
+    pub board: Board,   // the internal board logic
+    pub location: Vec2, // screen location of the BoardInstance
+    pub cell_size: f32, // size of the grid cells
 
     color: Rgba, // color of cells
 
@@ -148,7 +148,16 @@ impl BoardInstance {
                 }
             }
 
-            GameState::Clearing => {}
+            GameState::Clearing => {
+                if let Some(input) = input {
+                    self.handle_input(input);
+                }
+
+                if self.timers.clear_animation.tick(dt) {
+                    self.timers.clear_animation.reset();
+                    self.game_state = GameState::Ready;
+                }
+            }
 
             GameState::GameOver => {
                 // Grid has been filled to the top
@@ -172,7 +181,7 @@ impl BoardInstance {
         let color = self.get_piece_color();
 
         let spawn_pos = BoardPosition {
-            x: self.board.mid_x() - piece_type.max_x(0) / 2,
+            x: self.board.midpoint_x() - piece_type.max_x(0) / 2,
             y: self.board.height - piece_type.max_y(0) - 1,
         };
 
@@ -352,6 +361,8 @@ impl BoardInstance {
     /************************ Drawing methods *******************************/
 
     pub fn draw(&self, draw: &Draw) {
+        // Draw the board and active piece
+
         for y in 0..self.board.height {
             for x in 0..self.board.width {
                 let pos = BoardPosition { x, y };
@@ -376,36 +387,119 @@ impl BoardInstance {
                 }
             }
         }
+
+        let effective_state = if self.game_state == GameState::Paused {
+            self.prev_game_state.unwrap_or(self.game_state)
+        } else {
+            self.game_state
+        };
+
+        // Draw the clearing animation if effective state is Clearing state
+        if effective_state == GameState::Clearing {
+            self.draw_clear_animation(draw);
+        }
     }
 
     fn draw_cell(&self, draw: &Draw, pos: BoardPosition, color: Rgba) {
-        let screen_x = self.location.x + (pos.x as f32 * self.cell_size)
-            - (self.board.width as f32 * self.cell_size / 2.0);
-        let screen_y = self.location.y + (pos.y as f32 * self.cell_size)
-            - (self.board.height as f32 * self.cell_size / 2.0);
-
         // Draw block
         draw.rect()
             .stroke_weight(1.0)
             .stroke(BLACK)
-            .x_y(screen_x, screen_y)
+            .xy(pos.to_screen(self))
             .w_h(self.cell_size, self.cell_size) // cell size
             .color(color); // color
     }
 
     fn draw_unfilled_cell(&self, draw: &Draw, pos: BoardPosition) {
-        let screen_x = self.location.x + (pos.x as f32 * self.cell_size)
-            - (self.board.width as f32 * self.cell_size / 2.0);
-        let screen_y = self.location.y + (pos.y as f32 * self.cell_size)
-            - (self.board.height as f32 * self.cell_size / 2.0);
-
         // Draw block
         draw.rect()
             .stroke_weight(1.0)
             .stroke(WHITE)
-            .x_y(screen_x, screen_y)
+            .xy(pos.to_screen(self))
             .w_h(self.cell_size, self.cell_size) // cell size
             .color(BLACK); // color
+    }
+
+    fn draw_clear_animation(&self, draw: &Draw) {
+        let Some(rows) = &self.rows_to_clear else {
+            return;
+        };
+
+        let progress = self.timers.clear_animation.progress();
+
+        let top_row = rows.iter().max().unwrap_or(&0);
+        let bottom_row = rows.iter().min().unwrap_or(&0);
+
+        let top_bound = BoardPosition { x: 0, y: *top_row }.to_screen(self).y;
+        let bottom_bound = BoardPosition {
+            x: 0,
+            y: *bottom_row,
+        }
+        .to_screen(self)
+        .y;
+
+        let board_left_edge = self.location.x - (self.board.width as f32 * self.cell_size / 2.0);
+
+        let c_line_start = vec2(
+            board_left_edge,
+            bottom_bound + (top_bound - bottom_bound) / 2.0,
+        );
+        let c_line_end = c_line_start + vec2(self.board.width as f32 * self.cell_size, 0.0);
+
+        // Calculate separation based on progress
+        let separation_vec = vec2(0.0, progress * (top_bound - bottom_bound));
+
+        let top_line_start = c_line_start + separation_vec;
+        let top_line_end = c_line_end + separation_vec;
+
+        let bottom_line_start = c_line_start - separation_vec;
+        let bottom_line_end = c_line_end - separation_vec;
+
+        // Clear the area between the lines as they separate
+        if progress > 0.1 {
+            // Start clearing after a little bit of separation
+            let clear_height = (top_line_start.y - bottom_line_start.y).abs();
+            draw.rect()
+                .x_y(self.location.x, c_line_start.y)
+                .w_h(self.board.width as f32 * self.cell_size, clear_height)
+                .color(rgba(0.0, 0.0, 0.0, 0.8)); // Black rectangle to "clear" the area
+        }
+
+        // Draw top line
+        draw.line()
+            .points(top_line_start, top_line_end)
+            .color(rgba(1.0, 1.0, 1.0, 1.0)) // Bright white
+            .stroke_weight(1.0);
+
+        // Draw bottom line
+        draw.line()
+            .points(bottom_line_start, bottom_line_end)
+            .color(rgba(1.0, 1.0, 1.0, 1.0)) // Bright white
+            .stroke_weight(1.0);
+
+        // Draw bloom trail effect
+        for i in 1..=5 {
+            let offset = i as f32 * 1.0;
+            let alpha = 0.2 - (i as f32 * 0.04); // Decreasing alpha for fading effect
+
+            // Top bloom trail
+            draw.line()
+                .points(
+                    pt2(top_line_start.x, top_line_start.y + offset),
+                    pt2(top_line_end.x, top_line_end.y + offset),
+                )
+                .color(rgba(1.0, 1.0, 1.0, alpha))
+                .stroke_weight(1.0);
+
+            // Bottom bloom trail
+            draw.line()
+                .points(
+                    pt2(bottom_line_start.x, bottom_line_start.y - offset),
+                    pt2(bottom_line_end.x, bottom_line_end.y - offset),
+                )
+                .color(rgba(1.0, 1.0, 1.0, alpha))
+                .stroke_weight(1.0);
+        }
     }
 
     /************************ Utility methods *******************************/

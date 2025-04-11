@@ -138,6 +138,13 @@ impl Board {
             .unwrap_or(false)
     }
 
+    /************************ Geometry functions *******************************/
+
+    pub fn midpoint_x(&self) -> isize {
+        // note: in Rust, this always rounds down
+        self.width / 2
+    }
+
     /************************ Utility functions *******************************/
 
     // row-ordered 2D to 1D indexing
@@ -158,11 +165,6 @@ impl Board {
         let y = index as isize / self.width;
         let x = index as isize % self.width;
         Some((x, y))
-    }
-
-    pub fn mid_x(&self) -> isize {
-        // note: in Rust, this always rounds down
-        self.width / 2
     }
 
     pub fn row_score(&self, row: isize) -> Option<isize> {

@@ -3,7 +3,7 @@
 //
 // Defining the individual pieces on the screen
 
-use crate::models::PieceType;
+use crate::{models::PieceType, views::BoardInstance};
 use nannou::prelude::*;
 
 pub enum RotationDirection {
@@ -16,6 +16,19 @@ pub enum RotationDirection {
 pub struct BoardPosition {
     pub x: isize,
     pub y: isize,
+}
+
+impl BoardPosition {
+    // Cell origin is bottom_left. Board origin is center of board.
+    pub fn to_screen(&self, board: &BoardInstance) -> Vec2 {
+        let half_width = (board.board.width as f32 - 1.0) * 0.5 * board.cell_size;
+        let half_height = (board.board.height as f32 - 1.0) * 0.5 * board.cell_size;
+
+        vec2(
+            board.location.x + self.x as f32 * board.cell_size - half_width,
+            board.location.y + self.y as f32 * board.cell_size - half_height,
+        )
+    }
 }
 
 type Cells = [(isize, isize); 4];
