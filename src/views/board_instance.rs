@@ -29,6 +29,7 @@ pub enum GameState {
     Paused,
 }
 
+#[derive(PartialEq)]
 pub enum PlayerInput {
     L,
     R,
@@ -174,7 +175,7 @@ impl BoardInstance {
             GameState::Paused => {
                 // Pause the game
                 if let Some(input) = input {
-                    self.handle_input(input);
+                    self.handle_pause_input(input);
                 }
             }
         }
@@ -346,6 +347,13 @@ impl BoardInstance {
             PlayerInput::Pause => {
                 self.handle_pause();
             }
+        }
+    }
+
+    fn handle_pause_input(&mut self, input: &PlayerInput) {
+        // ignore everything except Pause
+        if *input == PlayerInput::Pause {
+            self.handle_pause();
         }
     }
 
