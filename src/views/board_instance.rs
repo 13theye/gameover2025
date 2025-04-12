@@ -161,6 +161,8 @@ impl BoardInstance {
                     self.handle_input(input);
                 }
 
+                print_col_score(self.board.col_score_all());
+
                 if self.timers.clear_animation.tick(dt) {
                     // Animation done, now update the model
                     if let Some(rows) = self.rows_to_clear.take() {
@@ -456,7 +458,7 @@ impl BoardInstance {
             .w_h(self.cell_size, self.cell_size) // cell size
             .color(BLACK) // color
             .stroke_weight(1.5)
-            .stroke(WHITE);
+            .stroke(rgba(0.2, 0.2, 0.2, 1.0));
     }
 
     fn draw_clear_animation(&self, draw: &Draw) {
@@ -551,7 +553,7 @@ fn spawn_new_piece_msg(piece: &PieceInstance) {
 }
 
 fn print_col_score(col_score: &Vec<isize>) {
-    println!("\nCol heights:");
+    println!("\nCol score:");
     println!("{:?}", col_score);
 }
 
