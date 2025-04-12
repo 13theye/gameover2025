@@ -36,17 +36,27 @@ impl Board {
 
     // Sees if the next placement is valid
     pub fn try_place(&mut self, piece: &PieceInstance, board_pos: BoardPosition) -> PlaceResult {
+        // First check if the piece's position is valid
+
         for &(dx, dy) in piece.cells() {
             let cell_pos = BoardPosition {
                 x: board_pos.x + dx,
                 y: board_pos.y + dy,
             };
 
+            println!("  Cell at {:?}", cell_pos);
+
             if self.idx(cell_pos.x, cell_pos.y).is_none() {
+                println!("Position: {:?} is OOB (cell at {:?}", board_pos, (dx, dy));
                 return PlaceResult::OutOfBounds;
             }
 
             if self.is_cell_filled(cell_pos) {
+                println!(
+                    "Position: {:?} is occupied (cell at {:?}",
+                    board_pos,
+                    (dx, dy)
+                );
                 return PlaceResult::PlaceBad;
             }
         }
@@ -67,6 +77,7 @@ impl Board {
         }
 
         // If we reach here, no row is filled.
+        println!("Position: {:?} is OK", board_pos);
         PlaceResult::PlaceOk
     }
 
@@ -108,7 +119,7 @@ impl Board {
         let (min_dx, max_dx) = piece.typ.minmax_x(piece.rot_idx);
 
         // Find the drop height
-        let mut max_required_y = 0;
+        let mut min_required_y = isize::MAX;
 
         // iterate over each column that the piece occupies
         for x_offset in 0..=(max_dx - min_dx) {
@@ -130,20 +141,21 @@ impl Board {
             let required_y = if col_score == 0 {
                 0 - skirt_val // place at grid bottom
             } else {
-                col_score + 1 - skirt_val // place above highest piece
+                col_score - skirt_val // place above highest piece
             };
 
-            if required_y > max_required_y {
-                max_required_y = required_y;
+            if required_y < min_required_y {
+                min_required_y = required_y;
             }
         }
 
         // 0 is the minimum y value
-        let final_y = std::cmp::max(0, max_required_y);
+        //let final_y: isize = std::cmp::max(0, max_required_y);
+        println!("Drop location y is {}", min_required_y);
 
         BoardPosition {
             x: piece.position.x,
-            y: final_y,
+            y: min_required_y,
         }
     }
 

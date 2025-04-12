@@ -2,6 +2,7 @@
 //
 // The timer utility
 
+#[derive(Debug)]
 pub struct Timer {
     duration: f32,
     elapsed: f32,

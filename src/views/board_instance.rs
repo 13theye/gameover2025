@@ -106,20 +106,49 @@ impl BoardInstance {
 
             GameState::Falling => {
                 // Handle an active piece
-
                 if let Some(input) = input {
                     self.handle_input(input);
                 }
 
-                if self.timers.gravity.tick(dt) && !self.apply_gravity() {
-                    // Drop the piece 1 cell per gravity_interval
-                    self.game_state = GameState::Locking { now: false };
+                if self.timers.gravity.tick(dt) {
+                    // Apply gravity and check the result
+                    if let Some(piece) = self.active_piece.as_mut() {
+                        if Self::is_piece_at_bottom(piece) {
+                            // Don't attempt to move below the bottom of the board
+                            self.game_state = GameState::Locking { now: false };
+                        } else {
+                            let next_pos = BoardPosition {
+                                x: piece.position.x,
+                                y: piece.position.y - 1,
+                            };
+
+                            let result = self.board.try_place(piece, next_pos);
+                            match result {
+                                PlaceResult::PlaceOk => {
+                                    // Piece moved down successfully, continue in Falling state
+                                    piece.position = next_pos;
+                                    self.timers.gravity.reset();
+                                    self.game_state = GameState::Falling;
+                                }
+                                PlaceResult::RowFilled => {
+                                    // Row was filled by gravity, immediately commit and clear
+                                    piece.position = next_pos;
+                                    self.game_state = GameState::Locking { now: true };
+                                }
+                                _ => {
+                                    println!("No valid falling position, now locking.");
+                                    self.game_state = GameState::Locking { now: false };
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
             GameState::Locking { now } => {
                 // Immediate piece commit if "now"
                 if now {
+                    println!("Immediate lock");
                     self.rows_to_clear = self.commit_piece();
                     if self.rows_to_clear.is_some() {
                         self.game_state = GameState::Clearing;
@@ -139,17 +168,24 @@ impl BoardInstance {
                     // Check if the piece can now fall
                     // because of some input during the Locking period
 
-                    let next_pos = BoardPosition {
-                        x: piece.position.x,
-                        y: piece.position.y - 1,
-                    };
+                    if Self::is_piece_at_bottom(piece) {
+                        // Don't attempt to move below the bottom of the board
+                        println!("Piece at bottom. Lock timer at {:?}", self.timers.lock);
+                    } else {
+                        let next_pos = BoardPosition {
+                            x: piece.position.x,
+                            y: piece.position.y - 1,
+                        };
 
-                    if self.board.try_place(piece, next_pos) == PlaceResult::PlaceOk {
-                        piece.position = next_pos;
-                        // Reset timers when piece moves
-                        self.timers.lock.reset();
-                        self.timers.gravity.reset();
-                        self.game_state = GameState::Falling;
+                        if self.board.try_place(piece, next_pos) == PlaceResult::PlaceOk {
+                            piece.position = next_pos;
+                            // Reset timers when piece moves
+                            self.timers.lock.reset();
+                            self.timers.gravity.reset();
+                            self.game_state = GameState::Falling;
+                            println!("Was Locking but now Falling again");
+                            println!("Piece is now at {:?}", next_pos);
+                        }
                     }
                 }
 
@@ -159,8 +195,10 @@ impl BoardInstance {
                     self.rows_to_clear = self.commit_piece();
                     if self.rows_to_clear.is_some() {
                         self.game_state = GameState::Clearing;
+                        println!("Was Locked but now Clearing");
                     } else {
                         self.game_state = GameState::Ready;
+                        println!("Was Locked but now Ready");
                     }
 
                     if DEBUG {
@@ -190,7 +228,7 @@ impl BoardInstance {
 
             GameState::GameOver => {
                 // Grid has been filled to the top
-
+                println!("GAME OVER");
                 // gameover state
             }
 
@@ -265,13 +303,18 @@ impl BoardInstance {
             match result {
                 PlaceResult::PlaceOk => {
                     piece.position = drop_pos;
+                    self.timers.lock.reset();
                     self.game_state = GameState::Locking { now: false };
+                    println!("Hard Drop - PlaceOk at {:?}", drop_pos);
                 }
                 PlaceResult::RowFilled => {
                     piece.position = drop_pos;
                     self.game_state = GameState::Locking { now: true };
+                    println!("Hard Drop - RowFilled");
                 }
-                PlaceResult::OutOfBounds | PlaceResult::PlaceBad => {}
+                PlaceResult::OutOfBounds | PlaceResult::PlaceBad => {
+                    println!("Hard Drop - PlaceBad / OOB");
+                }
             }
         }
     }
@@ -319,29 +362,6 @@ impl BoardInstance {
 
     /**************** Piece movement helper methods ******************/
 
-    // Drop a piece down the board
-    fn apply_gravity(&mut self) -> bool {
-        let Some(piece) = self.active_piece.as_mut() else {
-            return false;
-        };
-
-        let next_pos = BoardPosition {
-            x: piece.position.x,
-            y: piece.position.y - 1,
-        };
-
-        let can_place = matches!(
-            self.board.try_place(piece, next_pos),
-            PlaceResult::PlaceOk | PlaceResult::RowFilled
-        );
-
-        if can_place {
-            piece.position = next_pos;
-        }
-
-        can_place
-    }
-
     // Test movement validity
     fn try_piece_movement(&mut self, new_pos: BoardPosition) -> Option<PlaceResult> {
         self.active_piece
@@ -353,6 +373,14 @@ impl BoardInstance {
         self.active_piece
             .as_ref()
             .map(|piece| self.board.get_drop_location(piece))
+    }
+
+    fn is_piece_at_bottom(piece: &PieceInstance) -> bool {
+        // Check if any cell is at y=0
+        piece.cells().iter().any(|&(_dx, dy)| {
+            let cell_y = piece.position.y + dy;
+            cell_y == 0
+        })
     }
 
     /************************ Piece creation methods ************************/
