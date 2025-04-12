@@ -33,6 +33,7 @@ impl BoardPosition {
 
 type Cells = [(isize, isize); 4];
 
+#[derive(Clone)]
 pub struct PieceInstance {
     pub typ: PieceType,
     pub color: Rgba,

@@ -13,18 +13,21 @@ pub enum PlaceResult {
 }
 
 pub struct Board {
-    pub width: isize,  // the overall width in cells
-    pub height: isize, // the overall height in cells
-    state: BoardState, // the grid state
-    saved_state: Option<BoardState>,
+    pub width: isize,                // overall width in cells
+    pub height: isize,               // overall height in cells
+    state: BoardState,               // grid state
+    prev_state: BoardState,          // previous grid state for testing positions
+    saved_state: Option<BoardState>, // saved state for pausing
 }
 
 impl Board {
     pub fn new(width: usize, height: usize) -> Self {
+        let prev_state = BoardState::new(width, height);
         Self {
             width: width as isize,
             height: height as isize,
-            state: BoardState::new(width, height),
+            state: prev_state.clone(),
+            prev_state,
             saved_state: None,
         }
     }
@@ -48,7 +51,34 @@ impl Board {
             }
         }
 
+        // Clone current state
+        self.prev_state = self.state.clone();
+
+        // Check if cells would be filled
+        let mut test_piece = piece.clone();
+        test_piece.position = board_pos;
+        let row_filled = self.fills_row(&test_piece);
+
+        // Unwind temporary changes
+        std::mem::swap(&mut self.state, &mut self.prev_state);
+
+        if row_filled {
+            return PlaceResult::RowFilled;
+        }
+
+        // If we reach here, no row is filled.
         PlaceResult::PlaceOk
+    }
+
+    fn fills_row(&mut self, piece: &PieceInstance) -> bool {
+        piece.cells().iter().any(|&(dx, dy)| {
+            let cell_pos = BoardPosition {
+                x: piece.position.x + dx,
+                y: piece.position.y + dy,
+            };
+
+            matches!(self.fill_cell(cell_pos), PlaceResult::RowFilled)
+        })
     }
 
     // commit a pre-validated piece, returns any a Vec of any filled rows

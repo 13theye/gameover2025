@@ -19,11 +19,12 @@ const DEBUG: bool = true;
 const CLEAR_DURATION: f32 = 0.5;
 const SLIDE_DURATION: f32 = 0.15;
 
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone)]
 pub enum GameState {
-    Ready,    // ready to spawn a new piece
-    Falling,  // Piece is falling
-    Locking,  // Piece has landed and is about to commit
+    Ready,                 // ready to spawn a new piece
+    Falling,               // Piece is falling
+    Locking { now: bool }, // Piece has landed and is about to commit.
+    // "now" field allow for timer bypass
     Clearing, // Clearing the completed rows
     GameOver, // Game over
     Paused,
@@ -96,6 +97,7 @@ impl BoardInstance {
             GameState::Ready => {
                 // Spawn a new piece
                 if self.spawn_new_piece(rng) {
+                    self.timers.reset_all();
                     self.game_state = GameState::Falling;
                 } else {
                     self.game_state = GameState::GameOver;
@@ -111,11 +113,22 @@ impl BoardInstance {
 
                 if self.timers.gravity.tick(dt) && !self.apply_gravity() {
                     // Drop the piece 1 cell per gravity_interval
-                    self.game_state = GameState::Locking;
+                    self.game_state = GameState::Locking { now: false };
                 }
             }
 
-            GameState::Locking => {
+            GameState::Locking { now } => {
+                // Immediate piece commit if "now"
+                if now {
+                    self.rows_to_clear = self.commit_piece();
+                    if self.rows_to_clear.is_some() {
+                        self.game_state = GameState::Clearing;
+                    } else {
+                        self.game_state = GameState::Ready;
+                    }
+                    return;
+                }
+
                 // Last-minute adjustment period for piece
 
                 if let Some(input) = input {
@@ -234,7 +247,77 @@ impl BoardInstance {
         }
     }
 
-    /************************ Piece movement methods ************************/
+    /**************** Piece movement methods that affect GameState ******************/
+
+    // Player-induced drop down to lowest legal position
+    fn hard_drop(&mut self) {
+        // Check for a valid drop position
+        if let Some(drop_pos) = self.get_drop_location() {
+            // move piece to calculated position
+            let Some(result) = self.try_piece_movement(drop_pos) else {
+                return;
+            };
+
+            let Some(piece) = self.active_piece.as_mut() else {
+                return;
+            };
+
+            match result {
+                PlaceResult::PlaceOk => {
+                    piece.position = drop_pos;
+                    self.game_state = GameState::Locking { now: false };
+                }
+                PlaceResult::RowFilled => {
+                    piece.position = drop_pos;
+                    self.game_state = GameState::Locking { now: true };
+                }
+                PlaceResult::OutOfBounds | PlaceResult::PlaceBad => {}
+            }
+        }
+    }
+
+    fn move_active_piece(&mut self, new_pos: BoardPosition) {
+        let Some(result) = self.try_piece_movement(new_pos) else {
+            return;
+        };
+
+        let Some(piece) = self.active_piece.as_mut() else {
+            return;
+        };
+
+        match result {
+            PlaceResult::PlaceOk => {
+                piece.position = new_pos;
+            }
+            PlaceResult::RowFilled => {
+                piece.position = new_pos;
+                self.game_state = GameState::Locking { now: true };
+            }
+            PlaceResult::OutOfBounds | PlaceResult::PlaceBad => {}
+        }
+    }
+
+    // Player-induced piece rotation
+    // Only moves in Cw direction for now
+    fn rotate_active_piece(&mut self) {
+        if let Some(piece) = &mut self.active_piece {
+            // Save the current rotation index
+            let old_rot_idx = piece.rot_idx;
+
+            // Perform the rotation
+            piece.rotate(RotationDirection::Cw);
+
+            // Check if the new position is valid
+            if self.board.try_place(piece, piece.position) == PlaceResult::PlaceOk {
+                // Rotation successful, no further action needed
+            } else {
+                // Revert to the previous rotation
+                piece.rot_idx = old_rot_idx;
+            }
+        }
+    }
+
+    /**************** Piece movement helper methods ******************/
 
     // Drop a piece down the board
     fn apply_gravity(&mut self) -> bool {
@@ -259,60 +342,17 @@ impl BoardInstance {
         can_place
     }
 
-    // Player-induced drop down to lowest legal position
-    fn hard_drop(&mut self) {
-        if let Some(piece) = self.active_piece.as_mut() {
-            let drop_pos = self.board.get_drop_location(piece);
-
-            // move piece to calculated position
-            if self.move_active_piece(drop_pos) {
-                // Transition to locking
-                self.game_state = GameState::Locking;
-                if DEBUG {
-                    println!("Hard drop executed: piece at y: {}", drop_pos.y);
-                }
-            } else {
-                println!("Hard drop failed: attempted at y: {}", drop_pos.y);
-            }
-        }
+    // Test movement validity
+    fn try_piece_movement(&mut self, new_pos: BoardPosition) -> Option<PlaceResult> {
+        self.active_piece
+            .as_ref()
+            .map(|piece| self.board.try_place(piece, new_pos))
     }
 
-    // Player-induced movement of piece
-    fn move_active_piece(&mut self, new_pos: BoardPosition) -> bool {
-        let Some(piece) = self.active_piece.as_mut() else {
-            return false;
-        };
-
-        let can_place = matches!(
-            self.board.try_place(piece, new_pos),
-            PlaceResult::PlaceOk | PlaceResult::RowFilled
-        );
-
-        if can_place {
-            piece.position = new_pos;
-        }
-
-        can_place
-    }
-
-    // Player-induced piece rotation
-    // Only moves in Cw direction for now
-    fn rotate_active_piece(&mut self) {
-        if let Some(piece) = &mut self.active_piece {
-            // Save the current rotation index
-            let old_rot_idx = piece.rot_idx;
-
-            // Perform the rotation
-            piece.rotate(RotationDirection::Cw);
-
-            // Check if the new position is valid
-            if self.board.try_place(piece, piece.position) == PlaceResult::PlaceOk {
-                // Rotation successful, no further action needed
-            } else {
-                // Revert to the previous rotation
-                piece.rot_idx = old_rot_idx;
-            }
-        }
+    fn get_drop_location(&self) -> Option<BoardPosition> {
+        self.active_piece
+            .as_ref()
+            .map(|piece| self.board.get_drop_location(piece))
     }
 
     /************************ Piece creation methods ************************/
@@ -591,5 +631,28 @@ impl GameTimers {
         self.lock.resume();
         self.clear_animation.resume();
         self.slide_animation.resume();
+    }
+
+    pub fn reset_all(&mut self) {
+        self.gravity.reset();
+        self.lock.reset();
+        self.clear_animation.reset();
+        self.slide_animation.reset();
+    }
+}
+
+impl PartialEq for GameState {
+    fn eq(&self, other: &Self) -> bool {
+        use GameState::*;
+
+        matches!(
+            (self, other),
+            (Ready, Ready)
+                | (Falling, Falling)
+                | (Clearing, Clearing)
+                | (GameOver, GameOver)
+                | (Paused, Paused)
+                | (Locking { .. }, Locking { .. })
+        )
     }
 }
