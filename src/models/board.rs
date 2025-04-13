@@ -289,15 +289,90 @@ impl Board {
         let mut sorted_rows = rows.to_vec();
         sorted_rows.sort_by(|a, b| b.cmp(a));
 
-        // Clear each row
-        for &row in sorted_rows.iter() {
-            self.clear_row(row);
+        if DEBUG {
+            println!("Rows to clear: {:?}", sorted_rows)
         }
 
-        // Slide rows down, starting from lowest cleared row
+        // Move rows by an amount depending on how many rows were cleared below them
+        self.slide_rows_down(&sorted_rows);
+
+        // Adjust column heights
         if let Some(&lowest_row) = sorted_rows.last() {
-            self.slide_rows_down(lowest_row, sorted_rows.len() as isize);
             self.adjust_column_heights(lowest_row);
+        }
+    }
+
+    fn slide_rows_down(&mut self, cleared_rows: &[isize]) {
+        if cleared_rows.is_empty() {
+            return;
+        }
+
+        let highest_filled_row = *self.col_score_all().iter().max().unwrap_or(&self.height);
+        let min_cleared = *cleared_rows.iter().min().unwrap_or(&0);
+        let max_cleared = *cleared_rows.iter().max().unwrap_or(&self.height);
+        let count = cleared_rows.len() as isize;
+
+        if DEBUG {
+            println!("Sliding rows...");
+            println!(
+                "min: {}., max: {}, count: {}",
+                min_cleared, max_cleared, count
+            );
+        }
+
+        // First, handle any uncleared rows within the cleared range
+        for row in min_cleared..max_cleared {
+            // Skip the rows that were cleared -- we're looking for uncleared rows.
+            if cleared_rows.contains(&row) {
+                continue;
+            }
+
+            let slide_val: isize = cleared_rows.iter().filter(|&&y| row > y).count() as isize;
+            if DEBUG {
+                println!(
+                    "Found uncleared row between. Row: {}, Slide_val: {}",
+                    row, slide_val
+                )
+            }
+
+            self.slide_row_down(row, slide_val);
+        }
+
+        if DEBUG {
+            println!("Highest filled row: {}", highest_filled_row);
+        }
+
+        // Next, handle rows above the cleared range
+        for row in (max_cleared + 1)..highest_filled_row {
+            if DEBUG {
+                println!("Sliding row: {}, Slide_val: {}", row, count);
+            }
+
+            // Move all the cells down
+            self.slide_row_down(row, count);
+
+            // Now that the cells have been moved, clear the row.
+            self.clear_row(row)
+        }
+    }
+
+    fn slide_row_down(&mut self, row: isize, slide_val: isize) {
+        let target_y = row - slide_val;
+
+        // Clear the target row
+        self.clear_row(target_y);
+
+        // Move each cell to the target row
+        for x in 0..self.width {
+            let source_cell = self.is_cell_filled(BoardPosition { x, y: row });
+            if let Some(idx) = self.idx(x, target_y) {
+                self.state.grid[idx] = source_cell;
+            }
+        }
+
+        // Update row score by copying the old score to the new row
+        if row < self.height && target_y >= 0 {
+            self.state.row_score[target_y as usize] = self.state.row_score[row as usize];
         }
     }
 
@@ -313,52 +388,24 @@ impl Board {
         }
     }
 
-    fn slide_rows_down(&mut self, start_row: isize, count: isize) {
-        for y in (start_row + 1)..self.height {
-            for x in 0..self.width {
-                let target_y = y - count;
-
-                if target_y >= 0 {
-                    let source_cell = self.is_cell_filled(BoardPosition { x, y });
-
-                    // Update target cell
-                    if let Some(idx) = self.idx(x, target_y) {
-                        self.state.grid[idx] = source_cell;
-                    }
-                }
-            }
-
-            // Update row score
-            if y < self.height && (y - count) >= 0 {
-                self.state.row_score[(y - count) as usize] = self.state.row_score[y as usize];
-            }
-        }
-
-        // Clear the top rows that were moved down
-        for y in (self.height - count)..self.height {
-            if y >= 0 {
-                self.clear_row(y);
-            }
-        }
-    }
-
     fn adjust_column_heights(&mut self, lowest_cleared_row: isize) {
-        for x in 0..self.width as usize {
+        for x in 0..self.width {
             // Only recalculate if the column had a non-zero height
-            if self.state.col_score[x] > 0 {
+            let x_idx = x as usize;
+            if self.state.col_score[x_idx] > 0 {
                 // Start from the previous height or the lowest cleared row, whichever is higher
-                let start_y = std::cmp::max(self.state.col_score[x] - 1, lowest_cleared_row);
+                let start_y = std::cmp::max(self.state.col_score[x_idx] - 1, lowest_cleared_row);
 
                 // Find the new highest cell by scanning downward
                 let mut new_height = 0;
                 for y in (0..=start_y).rev() {
-                    if self.is_cell_filled(BoardPosition { x: x as isize, y }) {
+                    if self.is_cell_filled(BoardPosition { x, y }) {
                         new_height = y + 1;
                         break;
                     }
                 }
 
-                self.state.col_score[x] = new_height;
+                self.state.col_score[x_idx] = new_height;
             }
         }
     }

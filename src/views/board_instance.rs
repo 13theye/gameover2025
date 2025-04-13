@@ -231,13 +231,15 @@ impl BoardInstance {
                     self.handle_input(input);
                 }
 
-                if DEBUG {
-                    print_col_score(self.board.col_score_all());
-                }
-
                 // Let the animation run
                 if self.timers.clear_animation.tick(dt) {
                     // Animation done, now update the model
+
+                    if DEBUG {
+                        println!("Pre-clearing col score:");
+                        print_col_score(self.board.col_score_all());
+                    }
+
                     if let Some(rows) = self.rows_to_clear.take() {
                         self.clear_rows(&rows)
                     }
