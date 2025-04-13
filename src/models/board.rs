@@ -4,6 +4,8 @@
 
 use crate::views::{BoardPosition, PieceInstance};
 
+const DEBUG: bool = true;
+
 #[derive(PartialEq)]
 pub enum PlaceResult {
     PlaceOk,
@@ -45,16 +47,20 @@ impl Board {
             };
 
             if self.idx(cell_pos.x, cell_pos.y).is_none() {
-                println!("Position: {:?} is OOB -- cell at {:?}", board_pos, (dx, dy));
+                if DEBUG {
+                    println!("Position: {:?} is OOB -- cell at {:?}", board_pos, (dx, dy));
+                }
                 return PlaceResult::OutOfBounds;
             }
 
             if self.is_cell_filled(cell_pos) {
-                println!(
-                    "Position: {:?} is occupied -- cell at {:?}",
-                    board_pos,
-                    (dx, dy)
-                );
+                if DEBUG {
+                    println!(
+                        "Position: {:?} is occupied -- cell at {:?}",
+                        board_pos,
+                        (dx, dy)
+                    );
+                }
                 return PlaceResult::PlaceBad;
             }
         }
@@ -75,7 +81,9 @@ impl Board {
         }
 
         // If we reach here, no row is filled.
-        println!("Position: {:?} is OK", board_pos);
+        if DEBUG {
+            println!("Position: {:?} is OK", board_pos);
+        }
         PlaceResult::PlaceOk
     }
 
@@ -109,15 +117,45 @@ impl Board {
         (!filled_rows.is_empty()).then_some(filled_rows)
     }
 
+    fn fill_cell(&mut self, pos: BoardPosition) -> PlaceResult {
+        self.idx(pos.x, pos.y)
+            .map(|idx| {
+                self.state.grid[idx] = true;
+                self.state.update_col_score(pos);
+
+                // Notice if the row has been filled while updating row score
+                if self.state.update_row_score(pos) == self.width {
+                    PlaceResult::RowFilled
+                } else {
+                    PlaceResult::PlaceOk
+                }
+            })
+            // Invalid index means OOB
+            .unwrap_or(PlaceResult::OutOfBounds)
+    }
+
+    pub fn is_cell_filled(&self, pos: BoardPosition) -> bool {
+        self.idx(pos.x, pos.y)
+            .map(|idx| self.state.grid[idx])
+            .unwrap_or(false)
+    }
+
+    /************************ Piece Drop *******************************/
+
     // Find the lowest legal place for piece in its current x-position
     pub fn calculate_drop(&mut self, piece: &PieceInstance) -> (BoardPosition, PlaceResult) {
+        // Use brute force method if piece is below overhang (col_score not useful)
+        if self.is_below_overhang(piece) {
+            return self.slow_calculate_drop(piece);
+        }
+
         let skirt = piece.typ.skirt(piece.rot_idx);
 
         // Calculate grid min/max x
         let (min_dx, max_dx) = piece.typ.minmax_x(piece.rot_idx);
 
-        // Find the drop height
-        let mut min_required_y = isize::MAX;
+        // Find the max drop height valid for all cells of the piece:
+        let mut max_required_y = isize::MIN;
 
         // iterate over each column that the piece occupies
         for x_offset in 0..=(max_dx - min_dx) {
@@ -142,19 +180,56 @@ impl Board {
                 col_score - skirt_val // place above highest piece
             };
 
-            if required_y < min_required_y {
-                min_required_y = required_y;
+            if required_y > max_required_y {
+                max_required_y = required_y;
             }
         }
 
         let drop_position = BoardPosition {
             x: piece.position.x,
-            y: min_required_y,
+            y: max_required_y,
         };
-        println!("  Sending to verification: {:?}", drop_position);
+
+        if DEBUG {
+            println!("  Sending to verification: {:?}", drop_position);
+        }
 
         // check that position is valid
         self.verify_drop_location(piece, drop_position)
+    }
+
+    fn slow_calculate_drop(&mut self, piece: &PieceInstance) -> (BoardPosition, PlaceResult) {
+        if DEBUG {
+            println!("Piece below overhang, starting brute force drop calculation.")
+        }
+
+        let mut test_pos = piece.position;
+        let mut last_valid_pos = test_pos;
+        let mut last_result = PlaceResult::PlaceOk; // current position should be Ok
+
+        // Move down once cell at a time until collision
+        loop {
+            let next_pos = BoardPosition {
+                x: test_pos.x,
+                y: test_pos.y - 1,
+            };
+
+            let result = self.try_place(piece, next_pos);
+            match result {
+                PlaceResult::PlaceOk | PlaceResult::RowFilled => {
+                    // Try next row below this
+                    last_valid_pos = next_pos;
+                    last_result = result;
+                    test_pos = next_pos;
+                }
+                _ => {
+                    // Can't move down further
+                    break;
+                }
+            }
+        }
+
+        (last_valid_pos, last_result)
     }
 
     // Take a drop location and test for collisions. If collision, move up 1 row
@@ -165,14 +240,18 @@ impl Board {
         mut pos: BoardPosition,
     ) -> (BoardPosition, PlaceResult) {
         loop {
-            println!("  Verification: {:?}", pos);
+            if DEBUG {
+                println!("  Verification: {:?}", pos);
+            }
             let verification = self.try_place(piece, pos);
             match verification {
                 PlaceResult::PlaceOk | PlaceResult::RowFilled => {
                     return (pos, verification);
                 } // position is good
                 PlaceResult::OutOfBounds => {
-                    println!("   Verification OOB: {:?}", pos);
+                    if DEBUG {
+                        println!("   Verification OOB: {:?}", pos);
+                    }
                     pos.y += 1;
                 } // let this be caught downstream
                 PlaceResult::PlaceBad => {
@@ -182,27 +261,20 @@ impl Board {
         }
     }
 
-    fn fill_cell(&mut self, pos: BoardPosition) -> PlaceResult {
-        self.idx(pos.x, pos.y)
-            .map(|idx| {
-                self.state.grid[idx] = true;
-                self.state.update_col_score(pos);
+    fn is_below_overhang(&self, piece: &PieceInstance) -> bool {
+        piece.cells().iter().any(|&(dx, dy)| {
+            let cell_pos = BoardPosition {
+                x: piece.position.x + dx,
+                y: piece.position.y + dy,
+            };
 
-                // Notice if the row has been filled while updating row score
-                if self.state.update_row_score(pos) == self.width {
-                    PlaceResult::RowFilled
-                } else {
-                    PlaceResult::PlaceOk
-                }
-            })
-            // Invalid index means OOB
-            .unwrap_or(PlaceResult::OutOfBounds)
-    }
+            // Check if this cell is below an overhang
+            if let Some(score) = self.col_score(cell_pos.x) {
+                return cell_pos.y < (score - 1);
+            }
 
-    pub fn is_cell_filled(&self, pos: BoardPosition) -> bool {
-        self.idx(pos.x, pos.y)
-            .map(|idx| self.state.grid[idx])
-            .unwrap_or(false)
+            false // Not below an overhang if column score is unavailable
+        })
     }
 
     /************************ Row clearing functions ***************************/

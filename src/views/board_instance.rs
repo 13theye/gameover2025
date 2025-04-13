@@ -115,7 +115,9 @@ impl BoardInstance {
                     if let Some(piece) = self.active_piece.as_mut() {
                         if Self::is_piece_at_bottom(piece) {
                             // Don't attempt to move below the bottom of the board
-                            println!("Piece fell to bottom. Transition to Locking");
+                            if DEBUG {
+                                println!("Piece fell to bottom. Transition to Locking");
+                            }
                             self.game_state = GameState::Locking { now: false };
                         } else {
                             let next_pos = BoardPosition {
@@ -137,7 +139,9 @@ impl BoardInstance {
                                     self.game_state = GameState::Locking { now: true };
                                 }
                                 _ => {
-                                    println!("No valid falling position, now locking.");
+                                    if DEBUG {
+                                        println!("No valid falling position, now locking.");
+                                    }
                                     self.game_state = GameState::Locking { now: false };
                                 }
                             }
@@ -149,7 +153,9 @@ impl BoardInstance {
             GameState::Locking { now } => {
                 // Immediate piece commit if "now"
                 if now {
-                    println!("Immediate lock");
+                    if DEBUG {
+                        println!("Immediate lock");
+                    }
                     self.rows_to_clear = self.commit_piece();
                     if self.rows_to_clear.is_some() {
                         self.game_state = GameState::Clearing;
@@ -171,7 +177,9 @@ impl BoardInstance {
 
                     if Self::is_piece_at_bottom(piece) {
                         // Don't attempt to move below the bottom of the board
-                        println!("Piece at bottom. Lock timer at {:?}", self.timers.lock);
+                        if DEBUG {
+                            println!("Piece at bottom. Lock timer at {:?}", self.timers.lock);
+                        }
                     } else {
                         let next_pos = BoardPosition {
                             x: piece.position.x,
@@ -184,8 +192,11 @@ impl BoardInstance {
                             self.timers.lock.reset();
                             self.timers.gravity.reset();
                             self.game_state = GameState::Falling;
-                            println!("Was Locking but now Falling again");
-                            println!("Piece is now at {:?}", next_pos);
+
+                            if DEBUG {
+                                println!("Was Locking but now Falling again");
+                                println!("Piece is now at {:?}", next_pos);
+                            }
                         }
                     }
                 }
@@ -196,10 +207,16 @@ impl BoardInstance {
                     self.rows_to_clear = self.commit_piece();
                     if self.rows_to_clear.is_some() {
                         self.game_state = GameState::Clearing;
-                        println!("Was Locked but now Clearing");
+
+                        if DEBUG {
+                            println!("Was Locked but now Clearing");
+                        }
                     } else {
                         self.game_state = GameState::Ready;
-                        println!("Was Locked but now Ready");
+
+                        if DEBUG {
+                            println!("Was Locked but now Ready");
+                        }
                     }
 
                     if DEBUG {
@@ -292,7 +309,9 @@ impl BoardInstance {
     fn hard_drop(&mut self) {
         //Calculate a valid drop position
         if let Some((drop_pos, result)) = self.get_drop_location() {
-            println!("Drop location y is {:?}", drop_pos);
+            if DEBUG {
+                println!("Drop location y is {:?}", drop_pos);
+            }
 
             let Some(piece) = self.active_piece.as_mut() else {
                 return;
@@ -303,15 +322,21 @@ impl BoardInstance {
                     piece.position = drop_pos;
                     self.timers.lock.reset();
                     self.game_state = GameState::Locking { now: false };
-                    println!("Hard Drop - PlaceOk at {:?}", drop_pos);
+                    if DEBUG {
+                        println!("Hard Drop - PlaceOk at {:?}", drop_pos);
+                    }
                 }
                 PlaceResult::RowFilled => {
                     piece.position = drop_pos;
                     self.game_state = GameState::Locking { now: true };
-                    println!("Hard Drop - RowFilled");
+                    if DEBUG {
+                        println!("Hard Drop - RowFilled");
+                    }
                 }
                 PlaceResult::OutOfBounds | PlaceResult::PlaceBad => {
-                    println!("Hard Drop - PlaceBad / OOB");
+                    if DEBUG {
+                        println!("Hard Drop - PlaceBad / OOB");
+                    }
                 }
             }
         }
