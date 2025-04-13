@@ -16,7 +16,7 @@ pub struct Board {
     pub width: isize,                // overall width in cells
     pub height: isize,               // overall height in cells
     state: BoardState,               // grid state
-    prev_state: BoardState,          // previous grid state for testing positions
+    backup_state: BoardState,        // previous grid state for testing positions
     saved_state: Option<BoardState>, // saved state for pausing
 }
 
@@ -27,7 +27,7 @@ impl Board {
             width: width as isize,
             height: height as isize,
             state: prev_state.clone(),
-            prev_state,
+            backup_state: prev_state,
             saved_state: None,
         }
     }
@@ -44,16 +44,14 @@ impl Board {
                 y: board_pos.y + dy,
             };
 
-            println!("  Cell at {:?}", cell_pos);
-
             if self.idx(cell_pos.x, cell_pos.y).is_none() {
-                println!("Position: {:?} is OOB (cell at {:?}", board_pos, (dx, dy));
+                println!("Position: {:?} is OOB -- cell at {:?}", board_pos, (dx, dy));
                 return PlaceResult::OutOfBounds;
             }
 
             if self.is_cell_filled(cell_pos) {
                 println!(
-                    "Position: {:?} is occupied (cell at {:?}",
+                    "Position: {:?} is occupied -- cell at {:?}",
                     board_pos,
                     (dx, dy)
                 );
@@ -62,7 +60,7 @@ impl Board {
         }
 
         // Clone current state
-        self.prev_state = self.state.clone();
+        self.backup_state = self.state.clone();
 
         // Check if cells would be filled
         let mut test_piece = piece.clone();
@@ -70,7 +68,7 @@ impl Board {
         let row_filled = self.fills_row(&test_piece);
 
         // Unwind temporary changes
-        std::mem::swap(&mut self.state, &mut self.prev_state);
+        std::mem::swap(&mut self.state, &mut self.backup_state);
 
         if row_filled {
             return PlaceResult::RowFilled;
@@ -112,7 +110,7 @@ impl Board {
     }
 
     // Find the lowest legal place for piece in its current x-position
-    pub fn get_drop_location(&self, piece: &PieceInstance) -> BoardPosition {
+    pub fn calculate_drop(&mut self, piece: &PieceInstance) -> (BoardPosition, PlaceResult) {
         let skirt = piece.typ.skirt(piece.rot_idx);
 
         // Calculate grid min/max x
@@ -149,13 +147,38 @@ impl Board {
             }
         }
 
-        // 0 is the minimum y value
-        //let final_y: isize = std::cmp::max(0, max_required_y);
-        println!("Drop location y is {}", min_required_y);
-
-        BoardPosition {
+        let drop_position = BoardPosition {
             x: piece.position.x,
             y: min_required_y,
+        };
+        println!("  Sending to verification: {:?}", drop_position);
+
+        // check that position is valid
+        self.verify_drop_location(piece, drop_position)
+    }
+
+    // Take a drop location and test for collisions. If collision, move up 1 row
+    // and try again until no collisions remain.
+    fn verify_drop_location(
+        &mut self,
+        piece: &PieceInstance,
+        mut pos: BoardPosition,
+    ) -> (BoardPosition, PlaceResult) {
+        loop {
+            println!("  Verification: {:?}", pos);
+            let verification = self.try_place(piece, pos);
+            match verification {
+                PlaceResult::PlaceOk | PlaceResult::RowFilled => {
+                    return (pos, verification);
+                } // position is good
+                PlaceResult::OutOfBounds => {
+                    println!("   Verification OOB: {:?}", pos);
+                    pos.y += 1;
+                } // let this be caught downstream
+                PlaceResult::PlaceBad => {
+                    pos.y += 1;
+                }
+            }
         }
     }
 

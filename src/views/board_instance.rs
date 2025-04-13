@@ -115,6 +115,7 @@ impl BoardInstance {
                     if let Some(piece) = self.active_piece.as_mut() {
                         if Self::is_piece_at_bottom(piece) {
                             // Don't attempt to move below the bottom of the board
+                            println!("Piece fell to bottom. Transition to Locking");
                             self.game_state = GameState::Locking { now: false };
                         } else {
                             let next_pos = BoardPosition {
@@ -289,12 +290,9 @@ impl BoardInstance {
 
     // Player-induced drop down to lowest legal position
     fn hard_drop(&mut self) {
-        // Check for a valid drop position
-        if let Some(drop_pos) = self.get_drop_location() {
-            // move piece to calculated position
-            let Some(result) = self.try_piece_movement(drop_pos) else {
-                return;
-            };
+        //Calculate a valid drop position
+        if let Some((drop_pos, result)) = self.get_drop_location() {
+            println!("Drop location y is {:?}", drop_pos);
 
             let Some(piece) = self.active_piece.as_mut() else {
                 return;
@@ -369,10 +367,10 @@ impl BoardInstance {
             .map(|piece| self.board.try_place(piece, new_pos))
     }
 
-    fn get_drop_location(&self) -> Option<BoardPosition> {
+    fn get_drop_location(&mut self) -> Option<(BoardPosition, PlaceResult)> {
         self.active_piece
             .as_ref()
-            .map(|piece| self.board.get_drop_location(piece))
+            .map(|piece| self.board.calculate_drop(piece))
     }
 
     fn is_piece_at_bottom(piece: &PieceInstance) -> bool {
