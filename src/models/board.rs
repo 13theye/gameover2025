@@ -48,7 +48,11 @@ impl Board {
 
             if self.idx(cell_pos.x, cell_pos.y).is_none() {
                 if DEBUG {
-                    println!("Position: {:?} is OOB -- cell at {:?}", board_pos, (dx, dy));
+                    println!(
+                        "Try Position: {:?} is OOB -- cell at {:?}",
+                        board_pos,
+                        (dx, dy)
+                    );
                 }
                 return PlaceResult::OutOfBounds;
             }
@@ -56,7 +60,7 @@ impl Board {
             if self.is_cell_filled(cell_pos) {
                 if DEBUG {
                     println!(
-                        "Position: {:?} is occupied -- cell at {:?}",
+                        "Try Position: {:?} is occupied -- cell at {:?}",
                         board_pos,
                         (dx, dy)
                     );
@@ -82,11 +86,12 @@ impl Board {
 
         // If we reach here, no row is filled.
         if DEBUG {
-            println!("Position: {:?} is OK", board_pos);
+            println!("Try Position: {:?} is OK", board_pos);
         }
         PlaceResult::PlaceOk
     }
 
+    // Quick check that a piece would fill a row
     fn fills_row(&mut self, piece: &PieceInstance) -> bool {
         piece.cells().iter().any(|&(dx, dy)| {
             let cell_pos = BoardPosition {
@@ -98,7 +103,7 @@ impl Board {
         })
     }
 
-    // commit a pre-validated piece, returns any a Vec of any filled rows
+    // commit all cells of a pre-validated piece, returns any a Vec of any filled rows
     pub fn commit_piece(&mut self, piece: &PieceInstance) -> Option<Vec<isize>> {
         let filled_rows = piece
             .cells()

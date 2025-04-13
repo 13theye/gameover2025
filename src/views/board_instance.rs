@@ -156,6 +156,7 @@ impl BoardInstance {
                     if DEBUG {
                         println!("Immediate lock");
                     }
+
                     self.rows_to_clear = self.commit_piece();
                     if self.rows_to_clear.is_some() {
                         self.game_state = GameState::Clearing;
@@ -166,21 +167,19 @@ impl BoardInstance {
                 }
 
                 // Last-minute adjustment period for piece
-
                 if let Some(input) = input {
                     self.handle_input(input);
                 }
 
+                // Check if the piece can now fall because of some input during the Locking period
                 if let Some(piece) = self.active_piece.as_mut() {
-                    // Check if the piece can now fall
-                    // because of some input during the Locking period
-
                     if Self::is_piece_at_bottom(piece) {
                         // Don't attempt to move below the bottom of the board
                         if DEBUG {
                             println!("Piece at bottom. Lock timer at {:?}", self.timers.lock);
                         }
                     } else {
+                        // Try move the piece 1 row down
                         let next_pos = BoardPosition {
                             x: piece.position.x,
                             y: piece.position.y - 1,
@@ -188,7 +187,6 @@ impl BoardInstance {
 
                         if self.board.try_place(piece, next_pos) == PlaceResult::PlaceOk {
                             piece.position = next_pos;
-                            // Reset timers when piece moves
                             self.timers.lock.reset();
                             self.timers.gravity.reset();
                             self.game_state = GameState::Falling;
@@ -201,16 +199,18 @@ impl BoardInstance {
                     }
                 }
 
+                // Commit the piece, check for filled rows, return to Ready state.
                 if self.timers.lock.tick(dt) {
-                    // Lock the piece, commit, check for lines, return to Ready state.
-
                     self.rows_to_clear = self.commit_piece();
+
                     if self.rows_to_clear.is_some() {
                         self.game_state = GameState::Clearing;
 
                         if DEBUG {
                             println!("Was Locked but now Clearing");
                         }
+
+                    // Piece is locked and return to Ready state
                     } else {
                         self.game_state = GameState::Ready;
 
@@ -226,12 +226,16 @@ impl BoardInstance {
             }
 
             GameState::Clearing => {
+                // Give the game a chance to pause
                 if let Some(input) = input {
                     self.handle_input(input);
                 }
 
-                print_col_score(self.board.col_score_all());
+                if DEBUG {
+                    print_col_score(self.board.col_score_all());
+                }
 
+                // Let the animation run
                 if self.timers.clear_animation.tick(dt) {
                     // Animation done, now update the model
                     if let Some(rows) = self.rows_to_clear.take() {
@@ -303,7 +307,7 @@ impl BoardInstance {
         }
     }
 
-    /**************** Piece movement methods that affect GameState ******************/
+    /**************** Player input methods that affect GameState ******************/
 
     // Player-induced drop down to lowest legal position
     fn hard_drop(&mut self) {
