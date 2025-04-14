@@ -14,9 +14,9 @@ pub struct BackgroundManager {
 }
 
 impl BackgroundManager {
-    pub fn new() -> Self {
+    pub fn new(current_color: Rgb) -> Self {
         Self {
-            current_color: rgb(0.0, 0.0, 0.0),
+            current_color,
             flasher: BackgroundFlash::default(),
             color_fader: BackgroundColorFade::default(),
         }

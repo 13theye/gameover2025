@@ -100,7 +100,7 @@ impl PostProcessing {
         });
 
         // Vertical blur direction (0.0, 1.0)
-        let blur_v_direction = [0.0f32, 0.5f32];
+        let blur_v_direction = [0.0f32, 0.7f32];
         let blur_v_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertical Blur Buffer"),
             contents: bytemuck::cast_slice(&blur_v_direction),
@@ -124,7 +124,7 @@ impl PostProcessing {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
-        let max_blur_radius = 30.0f32;
+        let max_blur_radius = 40.0f32;
         let max_radius_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Max Radius Buffer"),
             contents: bytemuck::cast_slice(&[max_blur_radius]),

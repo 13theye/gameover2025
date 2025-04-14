@@ -71,8 +71,8 @@ impl BoardInstance {
         //let boundary_color = rgba(0.22, 0.902, 0.082, 1.0);
         //let piece_color = rgba(0.235, 0.851, 0.11, 1.0);
 
-        let boundary_color: Rgba = hsva(45.0 / 360.0, 1.0, 0.7, 1.0).into();
-        let piece_color: Rgba = hsva(45.0 / 360.0, 1.0, 0.65, 1.0).into();
+        let boundary_color: Rgba = hsva(40.0 / 360.0, 1.0, 0.75, 1.0).into();
+        let piece_color: Rgba = hsva(40.0 / 360.0, 1.0, 0.7, 1.0).into();
 
         Self {
             id: id.to_owned(),
@@ -578,7 +578,7 @@ impl BoardInstance {
         };
 
         let progress = self.timers.clear_animation.progress();
-        let alpha = 0.5 * progress.powf(2.0);
+        let alpha = 0.5 * progress.powf(1.4);
 
         // Find row bounds
         let top_row = *rows.iter().max().unwrap_or(&0);
@@ -600,9 +600,9 @@ impl BoardInstance {
         let center_y = bottom_bound + (top_bound - bottom_bound) / 2.0;
         let half_max_distance = (top_bound - bottom_bound) / 2.0;
         let half_separation = if top_row == bottom_row {
-            self.cell_size / 2.0 * progress.powf(2.0)
+            self.cell_size / 2.0 * progress.powf(1.2)
         } else {
-            half_max_distance * progress.powf(2.0)
+            half_max_distance * progress.powf(1.2)
         };
 
         // Line positions
@@ -616,7 +616,7 @@ impl BoardInstance {
             draw.rect()
                 .x_y(self.location.x, center_y)
                 .w_h(board_width, clear_height)
-                .color(rgba(1.0, 1.0, 1.0, alpha));
+                .color(rgba(1.0, 0.91, 0.65, alpha));
         }
 
         // Draw top and bottom lines
@@ -627,7 +627,7 @@ impl BoardInstance {
                     vec2(board_left_edge, y_pos),
                     vec2(board_left_edge + board_width, y_pos),
                 )
-                .color(rgba(1.0, 1.0, 1.0, alpha))
+                .color(rgba(1.0, 0.91, 0.65, alpha))
                 .stroke_weight(1.0);
         }
     }

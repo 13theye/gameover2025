@@ -35,7 +35,7 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     
     // Enhanced adaptive intensity - brighter pixels bloom more intensely
     // Store original brightness in alpha for later stages
-    let intensity = pow(brightness, 1.5); // Reduced power for wider bloom range
+    let intensity = pow(brightness, 1.4); // Reduced power for wider bloom range
     
     // Apply to color and store original brightness in alpha
     return vec4<f32>(color.rgb * intensity, brightness);

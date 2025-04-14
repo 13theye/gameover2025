@@ -37,7 +37,7 @@ fn fs_main(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     let brightness_factor = pow(base_brightness, adaptive_scaling); // Non-linear scaling
     let blur_radius = mix(base_radius, max_radius, brightness_factor);
     
-    let sigma = blur_radius / 2.0;
+    let sigma = blur_radius / 3.0;
     
     // Gaussian blur calculation
     var result = vec4<f32>(0.0, 0.0, 0.0, 0.0);

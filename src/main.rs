@@ -107,7 +107,7 @@ fn model(app: &App) -> Model {
         boards: HashMap::new(),
         board_config: config.board,
 
-        background: BackgroundManager::default(),
+        background: BackgroundManager::new(rgb(0.05, 0.03, 0.0)),
 
         player_input: None,
 
