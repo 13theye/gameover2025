@@ -84,7 +84,7 @@ impl PostProcessing {
         });
 
         // Create uniform buffers
-        let brightness_threshold = 0.6f32;
+        let brightness_threshold = 0.55f32;
         let threshold_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Threshold Buffer"),
             contents: bytemuck::cast_slice(&[brightness_threshold]),
@@ -100,7 +100,7 @@ impl PostProcessing {
         });
 
         // Vertical blur direction (0.0, 1.0)
-        let blur_v_direction = [0.0f32, 1.0f32];
+        let blur_v_direction = [0.0f32, 0.5f32];
         let blur_v_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertical Blur Buffer"),
             contents: bytemuck::cast_slice(&blur_v_direction),
@@ -108,7 +108,7 @@ impl PostProcessing {
         });
 
         // Bloom intensity
-        let bloom_intensity = 0.9f32;
+        let bloom_intensity = 3.0f32;
         let intensity_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Intensity Buffer"),
             contents: bytemuck::cast_slice(&[bloom_intensity]),
@@ -116,7 +116,7 @@ impl PostProcessing {
         });
 
         // Additional buffers for adaptive bloom
-        let adaptive_blur_scaling = 1.2f32;
+        let adaptive_blur_scaling = 5.0f32;
         let adaptive_scaling_buffer =
             device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Adaptive Scaling Buffer"),
@@ -124,14 +124,14 @@ impl PostProcessing {
                 usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
 
-        let max_blur_radius = 15.0f32;
+        let max_blur_radius = 30.0f32;
         let max_radius_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Max Radius Buffer"),
             contents: bytemuck::cast_slice(&[max_blur_radius]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        let intensity_curve = 1.5f32;
+        let intensity_curve = 5.0f32;
         let intensity_curve_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Intensity Curve Buffer"),
             contents: bytemuck::cast_slice(&[intensity_curve]),

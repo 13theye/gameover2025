@@ -13,10 +13,10 @@ use nannou::{
 };
 
 // helps visualize grid for debugging
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 
 // hard-coded animation timers
-const CLEAR_DURATION: f32 = 0.5;
+const CLEAR_DURATION: f32 = 1.0;
 const SLIDE_DURATION: f32 = 0.15;
 
 #[derive(Debug, Copy, Clone)]
@@ -68,8 +68,11 @@ impl BoardInstance {
         gravity_interval: f32,
         lock_delay: f32,
     ) -> Self {
-        let boundary_color = rgba(0.22, 0.902, 0.082, 1.0);
-        let piece_color = rgba(0.235, 0.851, 0.11, 1.0);
+        //let boundary_color = rgba(0.22, 0.902, 0.082, 1.0);
+        //let piece_color = rgba(0.235, 0.851, 0.11, 1.0);
+
+        let boundary_color: Rgba = hsva(45.0 / 360.0, 1.0, 0.7, 1.0).into();
+        let piece_color: Rgba = hsva(45.0 / 360.0, 1.0, 0.65, 1.0).into();
 
         Self {
             id: id.to_owned(),
@@ -575,6 +578,7 @@ impl BoardInstance {
         };
 
         let progress = self.timers.clear_animation.progress();
+        let alpha = 0.5 * progress.powf(2.0);
 
         // Find row bounds
         let top_row = *rows.iter().max().unwrap_or(&0);
@@ -594,15 +598,16 @@ impl BoardInstance {
 
         // Calculate separation based on progress. Minimum is half a cell height.
         let center_y = bottom_bound + (top_bound - bottom_bound) / 2.0;
-        let separation = if top_row == bottom_row {
-            progress * self.cell_size / 2.0
+        let half_max_distance = (top_bound - bottom_bound) / 2.0;
+        let half_separation = if top_row == bottom_row {
+            self.cell_size / 2.0 * progress.powf(2.0)
         } else {
-            progress * (top_bound - bottom_bound)
+            half_max_distance * progress.powf(2.0)
         };
 
         // Line positions
-        let top_y = center_y + separation;
-        let bottom_y = center_y - separation;
+        let top_y = center_y + half_separation;
+        let bottom_y = center_y - half_separation;
 
         // Clear the area between the lines as they separate
         if progress > 0.1 {
@@ -611,7 +616,7 @@ impl BoardInstance {
             draw.rect()
                 .x_y(self.location.x, center_y)
                 .w_h(board_width, clear_height)
-                .color(rgba(1.0, 1.0, 1.0, 0.5));
+                .color(rgba(1.0, 1.0, 1.0, alpha));
         }
 
         // Draw top and bottom lines
@@ -622,7 +627,7 @@ impl BoardInstance {
                     vec2(board_left_edge, y_pos),
                     vec2(board_left_edge + board_width, y_pos),
                 )
-                .color(rgba(1.0, 1.0, 1.0, 0.5))
+                .color(rgba(1.0, 1.0, 1.0, alpha))
                 .stroke_weight(1.0);
         }
     }

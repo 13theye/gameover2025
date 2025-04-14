@@ -4,7 +4,7 @@
 
 use crate::views::{BoardPosition, PieceInstance};
 
-const DEBUG: bool = true;
+const DEBUG: bool = false;
 
 #[derive(PartialEq)]
 pub enum PlaceResult {
