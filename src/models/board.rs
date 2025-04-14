@@ -471,6 +471,35 @@ impl Board {
         }
     }
 
+    /************************ Scoring functions *******************************/
+    pub fn score(&self) -> usize {
+        self.state.player_score()
+    }
+
+    pub fn score_cleared_rows(&mut self, number_of_rows: usize) -> usize {
+        let delta: usize = match number_of_rows {
+            1 => 100,
+            2 => 200,
+            3 => 500,
+            4 => 800,
+            _ => 0, // anything else is not a valid row clearing
+        };
+
+        self.add_score(delta)
+    }
+
+    pub fn score_piece(&mut self, piece: &PieceInstance, hard_drop: bool) -> usize {
+        if hard_drop {
+            self.add_score(piece.cells().len() * 2)
+        } else {
+            self.add_score(piece.cells().len())
+        }
+    }
+
+    pub fn add_score(&mut self, delta: usize) -> usize {
+        self.state.add_score(delta)
+    }
+
     /************************ Geometry functions *******************************/
 
     pub fn midpoint_x(&self) -> isize {
@@ -534,6 +563,7 @@ impl Board {
 #[derive(Debug, Clone)]
 struct BoardState {
     grid: Vec<bool>,       // which cells are filled
+    player_score: usize,   // player score
     row_score: Vec<isize>, // how many cells are filled in each row
     col_score: Vec<isize>, // height of the highest UNfilled cell of each col
 }
@@ -542,6 +572,7 @@ impl BoardState {
     pub fn new(width: usize, height: usize) -> Self {
         Self {
             grid: vec![false; width * height],
+            player_score: 0,
             row_score: vec![0; height],
             col_score: vec![0; width],
         }
@@ -561,5 +592,14 @@ impl BoardState {
         if pos.y >= self.col_score[pos.x as usize] {
             self.col_score[pos.x as usize] = pos.y + 1;
         }
+    }
+
+    pub fn player_score(&self) -> usize {
+        self.player_score
+    }
+
+    pub fn add_score(&mut self, delta: usize) -> usize {
+        self.player_score += delta;
+        delta
     }
 }

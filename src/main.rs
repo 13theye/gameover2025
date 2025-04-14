@@ -180,6 +180,7 @@ fn update(app: &App, model: &mut Model, _update: Update) {
     // Handle FPS and origin display
     if model.verbose {
         draw_fps(model);
+        draw_score(model);
     }
 
     render_and_post(app, model);
@@ -278,6 +279,18 @@ fn draw_fps(model: &Model) {
         .x_y(900.0, 520.0)
         .color(RED)
         .font_size(20);
+}
+
+fn draw_score(model: &Model) {
+    let draw = &model.draw;
+    let mut count = model.boards.len();
+    for (board_name, board) in &model.boards {
+        draw.text(&format!("{}: {:?}", board_name, board.score()))
+            .x_y(900.0, 520.0 - (25.0 * count as f32))
+            .color(RED)
+            .font_size(20);
+        count -= 1;
+    }
 }
 
 fn init_fps(app: &App, model: &mut Model) {

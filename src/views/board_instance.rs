@@ -23,10 +23,10 @@ const GAME_OVER_DURATION: f32 = 3.0;
 
 #[derive(Debug, Copy, Clone)]
 pub enum GameState {
-    Ready,                 // ready to spawn a new piece
-    Falling,               // Piece is falling
-    Locking { now: bool }, // Piece has landed and is about to commit.
-    // "now" field allow for timer bypass
+    Ready,                                  // ready to spawn a new piece
+    Falling,                                // Piece is falling
+    Locking { now: bool, hard_drop: bool }, // Piece has landed and is about to commit.
+    // "now" field allow for timer bypass; "hard_drop" is for scoring
     Clearing, // Clearing the completed rows
     GameOver, // Game over transition
     Frozen,   // frozen after Game Over
@@ -140,7 +140,10 @@ impl BoardInstance {
                             if DEBUG {
                                 println!("Piece fell to bottom. Transition to Locking");
                             }
-                            self.game_state = GameState::Locking { now: false };
+                            self.game_state = GameState::Locking {
+                                now: false,
+                                hard_drop: false,
+                            };
                         } else {
                             let next_pos = BoardPosition {
                                 x: piece.position.x,
@@ -158,13 +161,19 @@ impl BoardInstance {
                                 PlaceResult::RowFilled => {
                                     // Row was filled by gravity, immediately commit and clear
                                     piece.position = next_pos;
-                                    self.game_state = GameState::Locking { now: true };
+                                    self.game_state = GameState::Locking {
+                                        now: true,
+                                        hard_drop: false,
+                                    };
                                 }
                                 _ => {
                                     if DEBUG {
                                         println!("No valid falling position, now locking.");
                                     }
-                                    self.game_state = GameState::Locking { now: false };
+                                    self.game_state = GameState::Locking {
+                                        now: false,
+                                        hard_drop: false,
+                                    };
                                 }
                             }
                         }
@@ -172,13 +181,14 @@ impl BoardInstance {
                 }
             }
 
-            GameState::Locking { now } => {
+            GameState::Locking { now, hard_drop } => {
                 // Immediate piece commit if "now"
                 if now {
                     if DEBUG {
                         println!("Immediate lock");
                     }
 
+                    self.score_piece(hard_drop);
                     self.rows_to_clear = self.commit_piece();
                     if self.rows_to_clear.is_some() {
                         self.game_state = GameState::Clearing;
@@ -223,6 +233,7 @@ impl BoardInstance {
 
                 // Commit the piece, check for filled rows, return to Ready state.
                 if self.timers.lock.tick(dt) {
+                    self.score_piece(hard_drop);
                     self.rows_to_clear = self.commit_piece();
 
                     if self.rows_to_clear.is_some() {
@@ -263,6 +274,7 @@ impl BoardInstance {
                     }
 
                     if let Some(rows) = self.rows_to_clear.take() {
+                        self.score_rows(rows.len());
                         self.clear_rows(&rows)
                     }
 
@@ -358,14 +370,20 @@ impl BoardInstance {
                 PlaceResult::PlaceOk => {
                     piece.position = drop_pos;
                     self.timers.lock.reset();
-                    self.game_state = GameState::Locking { now: false };
+                    self.game_state = GameState::Locking {
+                        now: false,
+                        hard_drop: true,
+                    };
                     if DEBUG {
                         println!("Hard Drop - PlaceOk at {:?}", drop_pos);
                     }
                 }
                 PlaceResult::RowFilled => {
                     piece.position = drop_pos;
-                    self.game_state = GameState::Locking { now: true };
+                    self.game_state = GameState::Locking {
+                        now: true,
+                        hard_drop: true,
+                    };
                     if DEBUG {
                         println!("Hard Drop - RowFilled");
                     }
@@ -395,7 +413,10 @@ impl BoardInstance {
             }
             PlaceResult::RowFilled => {
                 piece.position = new_pos;
-                self.game_state = GameState::Locking { now: true };
+                self.game_state = GameState::Locking {
+                    now: true,
+                    hard_drop: false,
+                };
             }
             PlaceResult::OutOfBounds | PlaceResult::PlaceBad => {}
         }
@@ -451,6 +472,21 @@ impl BoardInstance {
     // the board's filled cell color.
     fn get_piece_color(&self) -> Rgba {
         self.color
+    }
+
+    /************************ Scoring methods **************************************/
+    fn score_piece(&mut self, hard_drop: bool) {
+        if let Some(piece) = &self.active_piece {
+            self.board.score_piece(piece, hard_drop);
+        }
+    }
+
+    fn score_rows(&mut self, number_of_rows: usize) {
+        self.board.score_cleared_rows(number_of_rows);
+    }
+
+    pub fn score(&self) -> usize {
+        self.board.score()
     }
 
     /************************ Input handling methods *******************************/
