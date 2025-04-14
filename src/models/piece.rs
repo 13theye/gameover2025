@@ -5,6 +5,10 @@
 //
 // A Piece's (0,0) is the bottom-left corner of the piece's footprint
 
+use crate::models::wall_kick::{
+    get_wall_kick_index, WallKickOffset, I_WALL_KICKS, JLSZT_WALL_KICKS, O_WALL_KICKS,
+};
+
 // Type alias for a Tetromino block
 type Block = (isize, isize);
 
@@ -53,6 +57,16 @@ impl PieceType {
         }
 
         skirt
+    }
+
+    pub fn wall_kick_offsets(&self, from_rot: usize, to_rot: usize) -> &'static [WallKickOffset] {
+        let kick_idx = get_wall_kick_index(from_rot, to_rot);
+
+        match self {
+            PieceType::I => I_WALL_KICKS[kick_idx],
+            PieceType::O => O_WALL_KICKS[0],
+            _ => JLSZT_WALL_KICKS[kick_idx],
+        }
     }
 
     // returns the minimum and maximum x offsets

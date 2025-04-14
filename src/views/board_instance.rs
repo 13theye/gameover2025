@@ -379,16 +379,44 @@ impl BoardInstance {
         if let Some(piece) = &mut self.active_piece {
             // Save the current rotation index
             let old_rot_idx = piece.rot_idx;
+            let old_position = piece.position;
 
             // Perform the rotation
             piece.rotate(RotationDirection::Cw);
+            let new_rot_idx = piece.rot_idx;
 
-            // Check if the new position is valid
+            // First, try rotation at the current position.
             if self.board.try_place(piece, piece.position) == PlaceResult::PlaceOk {
                 // Rotation successful, no further action needed
-            } else {
-                // Revert to the previous rotation
-                piece.rot_idx = old_rot_idx;
+                return;
+            }
+
+            // Get the wall kick offsets for this rotation transition
+            let offsets = piece.typ.wall_kick_offsets(old_rot_idx, new_rot_idx);
+
+            // Try each offset, skipping [0,0]
+            for &(dx, dy) in offsets.iter().skip(1) {
+                let test_pos = BoardPosition {
+                    x: piece.position.x + dx,
+                    y: piece.position.y + dy,
+                };
+
+                if self.board.try_place(piece, test_pos) == PlaceResult::PlaceOk {
+                    piece.position = test_pos;
+
+                    if DEBUG {
+                        println!("Wall kick succeeded with offset ({}, {})", dx, dy);
+                    }
+
+                    return;
+                }
+            }
+
+            // If this is reached, then none of the offsets worked. Revert to old rotation.
+            piece.rot_idx = old_rot_idx;
+
+            if DEBUG {
+                println!("Rotation failed, all wall kicks unsuccessful.");
             }
         }
     }
