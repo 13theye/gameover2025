@@ -19,6 +19,7 @@ const DEBUG: bool = false;
 // hard-coded animation timers
 const CLEAR_DURATION: f32 = 1.0;
 const SLIDE_DURATION: f32 = 0.15;
+const GAME_OVER_DURATION: f32 = 3.0;
 
 #[derive(Debug, Copy, Clone)]
 pub enum GameState {
@@ -27,7 +28,8 @@ pub enum GameState {
     Locking { now: bool }, // Piece has landed and is about to commit.
     // "now" field allow for timer bypass
     Clearing, // Clearing the completed rows
-    GameOver, // Game over
+    GameOver, // Game over transition
+    Frozen,   // frozen after Game Over
     Paused,
 }
 
@@ -47,6 +49,9 @@ pub struct BoardInstance {
     pub board: Board,   // the internal board logic
     pub location: Vec2, // screen location of the BoardInstance
     pub cell_size: f32, // size of the grid cells
+
+    screen_height: f32,
+    screen_width: f32,
 
     color: Rgba,          // color of cells
     boundary_color: Rgba, // color of outer boundary
@@ -75,18 +80,30 @@ impl BoardInstance {
         let boundary_color: Rgba = hsva(40.0 / 360.0, 1.0, 0.75, 1.0).into();
         let piece_color: Rgba = hsva(40.0 / 360.0, 1.0, 0.7, 1.0).into();
 
+        let screen_height = height as f32 * cell_size;
+        let screen_width = width as f32 * cell_size;
+
         Self {
             id: id.to_owned(),
             board: Board::new(width, height),
             location,
             cell_size,
 
+            screen_height,
+            screen_width,
+
             color: piece_color,
             boundary_color,
 
             game_state: GameState::Ready,
             prev_game_state: None,
-            timers: GameTimers::new(gravity_interval, lock_delay, CLEAR_DURATION, SLIDE_DURATION),
+            timers: GameTimers::new(
+                gravity_interval,
+                lock_delay,
+                CLEAR_DURATION,
+                SLIDE_DURATION,
+                GAME_OVER_DURATION,
+            ),
 
             rows_to_clear: None,
             active_piece: None,
@@ -104,6 +121,7 @@ impl BoardInstance {
                     self.timers.reset_all();
                     self.game_state = GameState::Falling;
                 } else {
+                    self.timers.reset_all();
                     self.game_state = GameState::GameOver;
                 }
             }
@@ -256,8 +274,20 @@ impl BoardInstance {
 
             GameState::GameOver => {
                 // Grid has been filled to the top
-                println!("GAME OVER");
-                // gameover state
+                self.commit_piece();
+                if let Some(input) = input {
+                    self.handle_input(input);
+                }
+                if self.timers.game_over_animation.tick(dt) {
+                    self.game_state = GameState::Frozen;
+                }
+            }
+
+            GameState::Frozen => {
+                // Game Over, freeze the game.
+                if let Some(input) = input {
+                    self.handle_input(input);
+                }
             }
 
             GameState::Paused => {
@@ -288,14 +318,11 @@ impl BoardInstance {
             PlaceResult::PlaceOk | PlaceResult::RowFilled
         );
 
-        if can_place {
-            if DEBUG {
-                spawn_new_piece_msg(&new_piece);
-            }
-
-            self.active_piece = Some(new_piece);
+        if can_place && DEBUG {
+            spawn_new_piece_msg(&new_piece);
         }
 
+        self.active_piece = Some(new_piece);
         can_place
     }
 
@@ -502,12 +529,48 @@ impl BoardInstance {
 
     // Draw orchestrator
     pub fn draw(&self, draw: &Draw) {
+        // Allow for pausing during clearing animation
+        let effective_state = if self.game_state == GameState::Paused {
+            self.prev_game_state.unwrap_or(self.game_state)
+        } else {
+            self.game_state
+        };
+
+        // GameOver animation handling
+        let mut game_over_line_pos = f32::MIN;
+        if effective_state == GameState::GameOver {
+            game_over_line_pos = {
+                let progress = self.timers.game_over_animation.progress();
+                let top_bound = self.screen_height / 2.0 + self.location.y;
+                let bottom_bound = self.location.y - self.screen_height / 2.0;
+                let max_distance = top_bound - bottom_bound;
+                let separation = max_distance * progress;
+                top_bound - separation
+            };
+        }
+
+        let mut altered_color = self.color;
+        if matches!(effective_state, GameState::GameOver | GameState::Frozen) {
+            let avg = (self.color.red + self.color.green + self.color.blue) / 3.0;
+            altered_color = rgba(avg, avg, avg, self.color.alpha);
+        }
+
         // Draw the board
         for y in 0..self.board.height {
             for x in 0..self.board.width {
                 let pos = BoardPosition { x, y };
                 if self.board.is_cell_filled(pos) {
-                    self.draw_cell(draw, pos, self.color);
+                    let screen_pos = pos.to_screen(self);
+
+                    // Handle GameOver modified cell color
+                    if matches!(effective_state, GameState::GameOver | GameState::Frozen)
+                        && screen_pos.y > game_over_line_pos
+                    {
+                        self.draw_cell(draw, pos, altered_color);
+                    } else {
+                        // Draw the cell normally
+                        self.draw_cell(draw, pos, self.color);
+                    }
                 } else if DEBUG {
                     self.draw_unfilled_cell(draw, pos)
                 }
@@ -529,20 +592,22 @@ impl BoardInstance {
             }
         }
 
-        // Allow for pausing during clearing animation
-        let effective_state = if self.game_state == GameState::Paused {
-            self.prev_game_state.unwrap_or(self.game_state)
-        } else {
-            self.game_state
-        };
-
         // Draw the clearing animation if effective state is Clearing state
         if effective_state == GameState::Clearing {
             self.draw_clear_animation(draw);
         }
 
+        // Draw the game over animation if effective state is GameOver state
+        if effective_state == GameState::GameOver {
+            self.draw_game_over(draw, game_over_line_pos);
+        }
+
         // Draw boundary around the board
-        self.draw_boundary(draw);
+        if effective_state == GameState::Frozen {
+            self.draw_boundary(draw, altered_color);
+        } else {
+            self.draw_boundary(draw, self.boundary_color);
+        }
     }
 
     // Draw a filled cell
@@ -605,7 +670,7 @@ impl BoardInstance {
         let bottom_y = center_y - half_separation;
 
         // Clear the area between the lines as they separate
-        if progress > 0.1 {
+        if progress > 0.01 {
             // Start clearing after a little bit of separation
             let clear_height = (top_y - bottom_y).abs();
             draw.rect()
@@ -627,16 +692,27 @@ impl BoardInstance {
         }
     }
 
+    fn draw_game_over(&self, draw: &Draw, line_pos: f32) {
+        let board_left_edge = self.location.x - self.screen_width / 2.0;
+        let board_width = self.screen_width;
+
+        // Main line
+        draw.line()
+            .points(
+                vec2(board_left_edge, line_pos),
+                vec2(board_left_edge + board_width, line_pos),
+            )
+            .color(rgba(1.0, 0.91, 0.65, 0.55))
+            .stroke_weight(3.0);
+    }
+
     // Draw the outer boundary of the grid
-    fn draw_boundary(&self, draw: &Draw) {
+    fn draw_boundary(&self, draw: &Draw, color: Rgba) {
         draw.rect()
             .x_y(self.location.x, self.location.y)
-            .w_h(
-                self.board.width as f32 * self.cell_size,
-                self.board.height as f32 * self.cell_size,
-            )
+            .w_h(self.screen_width, self.screen_height)
             .stroke_weight(1.0)
-            .stroke_color(self.boundary_color)
+            .stroke_color(color)
             .color(rgba(0.0, 0.0, 0.0, 0.0));
     }
 
@@ -671,6 +747,7 @@ struct GameTimers {
     lock: Timer,
     clear_animation: Timer,
     slide_animation: Timer,
+    game_over_animation: Timer,
 }
 
 impl GameTimers {
@@ -679,12 +756,14 @@ impl GameTimers {
         lock_delay: f32,
         clear_duration: f32,
         slide_duration: f32,
+        game_over_duration: f32,
     ) -> Self {
         Self {
             gravity: Timer::new(gravity_interval),
             lock: Timer::new(lock_delay),
             clear_animation: Timer::new(clear_duration),
             slide_animation: Timer::new(slide_duration), // currently unused
+            game_over_animation: Timer::new(game_over_duration),
         }
     }
 
@@ -693,6 +772,7 @@ impl GameTimers {
         self.lock.pause();
         self.clear_animation.pause();
         self.slide_animation.pause();
+        self.game_over_animation.pause();
     }
 
     pub fn resume_all(&mut self) {
@@ -700,6 +780,7 @@ impl GameTimers {
         self.lock.resume();
         self.clear_animation.resume();
         self.slide_animation.resume();
+        self.game_over_animation.resume();
     }
 
     pub fn reset_all(&mut self) {
@@ -707,6 +788,7 @@ impl GameTimers {
         self.lock.reset();
         self.clear_animation.reset();
         self.slide_animation.reset();
+        self.game_over_animation.reset();
     }
 }
 
@@ -722,6 +804,7 @@ impl PartialEq for GameState {
                 | (GameOver, GameOver)
                 | (Paused, Paused)
                 | (Locking { .. }, Locking { .. })
+                | (Frozen, Frozen)
         )
     }
 }

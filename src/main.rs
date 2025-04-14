@@ -207,7 +207,7 @@ fn key_pressed(app: &App, model: &mut Model, key: Key) {
         Key::Key2 => model.player_input = Some(PlayerInput::ResumeState),
 
         Key::G => {
-            model.make_board("board", vec2(0.0, 0.0));
+            model.make_board("board", vec2(-300.0, 0.0));
         }
         Key::P => {
             model.verbose = !model.verbose;
