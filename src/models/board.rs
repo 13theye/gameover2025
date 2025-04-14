@@ -1,8 +1,9 @@
 // src/models/board.rs
 //
-// Defining the Tetris Board model
+// The Tetris Board model
+// handles grid state and piece positioning
 
-use crate::views::{BoardPosition, PieceInstance};
+use crate::views::{BoardPosition, PieceInstance, RotationDirection};
 
 const DEBUG: bool = false;
 
@@ -89,6 +90,56 @@ impl Board {
             println!("Try Position: {:?} is OK", board_pos);
         }
         PlaceResult::PlaceOk
+    }
+
+    pub fn try_rotation(
+        &mut self,
+        piece: &PieceInstance,
+        rotation_direction: &RotationDirection,
+    ) -> Option<BoardPosition> {
+        // Save current position
+        let current_pos = piece.position;
+
+        // Create a test piece with the new rotation
+        let mut test_piece = piece.clone();
+        test_piece.rotate(rotation_direction);
+
+        // First, try rotation at the current position (no wall kick needed)
+        if self.try_place(&test_piece, current_pos) == PlaceResult::PlaceOk {
+            if DEBUG {
+                println!("Rotation succeeded in original position");
+            }
+            return Some(current_pos);
+        }
+
+        // Get wall kick offsets for this rotation transition
+        let offsets = test_piece
+            .typ
+            .wall_kick_offsets(piece.rot_idx, test_piece.rot_idx);
+
+        // Try each offset, skipping [0,0] that was already tried)
+        for &(dx, dy) in offsets.iter().skip(1) {
+            let test_pos = BoardPosition {
+                x: current_pos.x + dx,
+                y: current_pos.y + dy,
+            };
+
+            if self.try_place(&test_piece, test_pos) == PlaceResult::PlaceOk {
+                // Success
+                if DEBUG {
+                    println!("Rotation succeeded with wall kick to {:?}", test_pos);
+                }
+
+                return Some(test_pos);
+            }
+        }
+
+        // No valid position found
+        if DEBUG {
+            println!("Rotation failed, all wall kicks unsuccessful");
+        }
+
+        None
     }
 
     // Quick check that a piece would fill a row

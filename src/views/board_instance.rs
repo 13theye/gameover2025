@@ -1,6 +1,7 @@
 // src/views/board_instance.rs
 //
 // An individual Tetris board
+// handles game state, player input
 
 use crate::{
     models::{Board, PieceType, PlaceResult},
@@ -373,50 +374,16 @@ impl BoardInstance {
         }
     }
 
-    // Player-induced piece rotation
-    // Only moves in Cw direction for now
     fn rotate_active_piece(&mut self) {
         if let Some(piece) = &mut self.active_piece {
-            // Save the current rotation index
-            let old_rot_idx = piece.rot_idx;
-            let old_position = piece.position;
+            // Only clockwise rotations supported
+            let rotation_direction = RotationDirection::Cw;
 
-            // Perform the rotation
-            piece.rotate(RotationDirection::Cw);
-            let new_rot_idx = piece.rot_idx;
-
-            // First, try rotation at the current position.
-            if self.board.try_place(piece, piece.position) == PlaceResult::PlaceOk {
-                // Rotation successful, no further action needed
-                return;
-            }
-
-            // Get the wall kick offsets for this rotation transition
-            let offsets = piece.typ.wall_kick_offsets(old_rot_idx, new_rot_idx);
-
-            // Try each offset, skipping [0,0]
-            for &(dx, dy) in offsets.iter().skip(1) {
-                let test_pos = BoardPosition {
-                    x: piece.position.x + dx,
-                    y: piece.position.y + dy,
-                };
-
-                if self.board.try_place(piece, test_pos) == PlaceResult::PlaceOk {
-                    piece.position = test_pos;
-
-                    if DEBUG {
-                        println!("Wall kick succeeded with offset ({}, {})", dx, dy);
-                    }
-
-                    return;
-                }
-            }
-
-            // If this is reached, then none of the offsets worked. Revert to old rotation.
-            piece.rot_idx = old_rot_idx;
-
-            if DEBUG {
-                println!("Rotation failed, all wall kicks unsuccessful.");
+            // Try to find a valid position with wall kicks
+            if let Some(new_pos) = self.board.try_rotation(piece, &rotation_direction) {
+                // Apply rotation and position
+                piece.rotate(&rotation_direction);
+                piece.position = new_pos;
             }
         }
     }

@@ -56,7 +56,7 @@ impl PieceInstance {
     }
 
     // Look up the rotation from the piece type table
-    pub fn rotate(&mut self, direction: RotationDirection) -> &Cells {
+    pub fn rotate(&mut self, direction: &RotationDirection) -> &Cells {
         let count = self.typ.rotation_count();
 
         let inx = match direction {
