@@ -348,6 +348,7 @@ impl BoardInstance {
         }
     }
 
+    // Generalized function to handle moving a piece to any position
     fn move_active_piece(&mut self, new_pos: BoardPosition) {
         let Some(result) = self.try_piece_movement(new_pos) else {
             return;
@@ -398,12 +399,14 @@ impl BoardInstance {
             .map(|piece| self.board.try_place(piece, new_pos))
     }
 
+    // Obtain the valid hard drop position of the currently active piece
     fn get_drop_location(&mut self) -> Option<(BoardPosition, PlaceResult)> {
         self.active_piece
             .as_ref()
             .map(|piece| self.board.calculate_drop(piece))
     }
 
+    // Checks that a piece is at the bottom of the grid
     fn is_piece_at_bottom(piece: &PieceInstance) -> bool {
         // Check if any cell is at y=0
         piece.cells().iter().any(|&(_dx, dy)| {
@@ -413,11 +416,14 @@ impl BoardInstance {
     }
 
     /************************ Piece creation methods ************************/
+    // Obtain a random PieceType
     fn get_random_piece_type(&self, rng: &mut ThreadRng) -> PieceType {
         let idx = rng.gen_range(0.0..7.0).trunc() as usize;
         PieceType::from_idx(idx)
     }
 
+    // Get the piece's color; currently all pieces are the same color so just returns
+    // the board's filled cell color.
     fn get_piece_color(&self) -> Rgba {
         self.color
     }
@@ -479,6 +485,7 @@ impl BoardInstance {
         }
     }
 
+    // When paused, ignore piece movement inputs
     fn handle_pause(&mut self) {
         if self.game_state == GameState::Paused {
             // Exiting pause state
@@ -495,6 +502,7 @@ impl BoardInstance {
 
     /************************ Drawing methods *******************************/
 
+    // Draw orchestrator
     pub fn draw(&self, draw: &Draw) {
         // Draw the board
         for y in 0..self.board.height {
@@ -523,6 +531,7 @@ impl BoardInstance {
             }
         }
 
+        // Allow for pausing during clearing animation
         let effective_state = if self.game_state == GameState::Paused {
             self.prev_game_state.unwrap_or(self.game_state)
         } else {
@@ -538,6 +547,7 @@ impl BoardInstance {
         self.draw_boundary(draw);
     }
 
+    // Draw a filled cell
     fn draw_cell(&self, draw: &Draw, pos: BoardPosition, color: Rgba) {
         // Draw block
         draw.rect()
@@ -548,6 +558,7 @@ impl BoardInstance {
             .stroke(BLACK);
     }
 
+    // For debug, draw the unfilled cell's outline
     fn draw_unfilled_cell(&self, draw: &Draw, pos: BoardPosition) {
         // Draw block
         draw.rect()
@@ -616,6 +627,7 @@ impl BoardInstance {
         }
     }
 
+    // Draw the outer boundary of the grid
     fn draw_boundary(&self, draw: &Draw) {
         draw.rect()
             .x_y(self.location.x, self.location.y)
@@ -672,7 +684,7 @@ impl GameTimers {
             gravity: Timer::new(gravity_interval),
             lock: Timer::new(lock_delay),
             clear_animation: Timer::new(clear_duration),
-            slide_animation: Timer::new(slide_duration),
+            slide_animation: Timer::new(slide_duration), // currently unused
         }
     }
 

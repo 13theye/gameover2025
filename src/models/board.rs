@@ -36,7 +36,7 @@ impl Board {
 
     /************************ Piece Placement *******************************/
 
-    // Sees if the next placement is valid
+    // Check validity of desired piece placement, returns result of placement
     pub fn try_place(&mut self, piece: &PieceInstance, board_pos: BoardPosition) -> PlaceResult {
         // First check if the piece's position is valid
 
@@ -122,6 +122,7 @@ impl Board {
         (!filled_rows.is_empty()).then_some(filled_rows)
     }
 
+    // Fill the cell in the Grid abstraction & update the col/row scores
     fn fill_cell(&mut self, pos: BoardPosition) -> PlaceResult {
         self.idx(pos.x, pos.y)
             .map(|idx| {
@@ -148,6 +149,7 @@ impl Board {
     /************************ Piece Drop *******************************/
 
     // Find the lowest legal place for piece in its current x-position
+    // This is the normal route and uses a quick calculation using col_score
     pub fn calculate_drop(&mut self, piece: &PieceInstance) -> (BoardPosition, PlaceResult) {
         // Use brute force method if piece is below overhang (col_score not useful)
         if self.is_below_overhang(piece) {
@@ -203,6 +205,8 @@ impl Board {
         self.verify_drop_location(piece, drop_position)
     }
 
+    // For pieces below an overhang, col_score won't work, so step through each
+    // cell position and check for the drop height.
     fn slow_calculate_drop(&mut self, piece: &PieceInstance) -> (BoardPosition, PlaceResult) {
         if DEBUG {
             println!("Piece below overhang, starting brute force drop calculation.")
@@ -284,6 +288,7 @@ impl Board {
 
     /************************ Row clearing functions ***************************/
 
+    // Orchestrate row clearing and sliding on RowFilled
     pub fn clear_rows(&mut self, rows: &[isize]) {
         // Sort rows in descending order
         let mut sorted_rows = rows.to_vec();
@@ -294,19 +299,21 @@ impl Board {
         }
 
         // Move rows by an amount depending on how many rows were cleared below them
-        self.slide_rows_down(&sorted_rows);
+        self.handle_sliding(&sorted_rows);
 
         // Adjust column heights
         if let Some(&lowest_row) = sorted_rows.last() {
-            self.adjust_column_heights(lowest_row);
+            self.adjust_col_scores(lowest_row);
         }
     }
 
-    fn slide_rows_down(&mut self, cleared_rows: &[isize]) {
+    // Handle row sliding based on a row's position
+    fn handle_sliding(&mut self, cleared_rows: &[isize]) {
         if cleared_rows.is_empty() {
             return;
         }
 
+        // We'll need these numbers to determine the scope of row clearing.
         let highest_filled_row = *self.col_score_all().iter().max().unwrap_or(&self.height);
         let min_cleared = *cleared_rows.iter().min().unwrap_or(&0);
         let max_cleared = *cleared_rows.iter().max().unwrap_or(&self.height);
@@ -356,6 +363,7 @@ impl Board {
         }
     }
 
+    // Slide down an individual row, copying grid and row score
     fn slide_row_down(&mut self, row: isize, slide_val: isize) {
         let target_y = row - slide_val;
 
@@ -376,6 +384,7 @@ impl Board {
         }
     }
 
+    // Clear a row completely
     fn clear_row(&mut self, row: isize) {
         for x in 0..self.width {
             if let Some(idx) = self.idx(x, row) {
@@ -388,7 +397,8 @@ impl Board {
         }
     }
 
-    fn adjust_column_heights(&mut self, lowest_cleared_row: isize) {
+    // Recalculate col_score after sliding/clearing operations
+    fn adjust_col_scores(&mut self, lowest_cleared_row: isize) {
         for x in 0..self.width {
             // Only recalculate if the column had a non-zero height
             let x_idx = x as usize;
