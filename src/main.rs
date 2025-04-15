@@ -1,12 +1,12 @@
 // src/main.rs
 
-use nannou::prelude::*;
-use std::{collections::HashMap, time::Instant};
-use tacit_gameover::{
+use gameover2025::{
     config::*,
-    post::PostProcessing,
     views::{BackgroundManager, BoardInstance, PlayerInput},
 };
+use nannou::prelude::*;
+use nnpipe::*;
+use std::{collections::HashMap, time::Instant};
 
 struct Model {
     // Tetris Boards
@@ -28,7 +28,7 @@ struct Model {
 
     texture: wgpu::Texture,
     texture_reshaper: wgpu::TextureReshaper,
-    post_processing: PostProcessing,
+    post_processing: Nnpipe,
 
     // FPS
     last_update: Instant,
@@ -82,7 +82,7 @@ fn model(app: &App) -> Model {
     let draw_renderer = nannou::draw::RendererBuilder::new()
         .build_from_texture_descriptor(device, texture.descriptor());
     let sample_count = window.msaa_samples();
-    let post_processing = PostProcessing::new(
+    let post_processing = Nnpipe::new(
         device,
         config.rendering.texture_width,
         config.rendering.texture_height,

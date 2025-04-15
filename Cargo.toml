@@ -1,5 +1,5 @@
 [package]
-name = "tacit-gameover"
+name = "gameover2025"
 authors = ["13th Eye <jjhh@13theye.com>"]
 version = "0.1.0"
 edition = "2021"
@@ -9,13 +9,12 @@ nannou = "0.19"
 nannou_osc = "0.19.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
-bytemuck = "1.13.1"
-wgpu-types = "0.17.0"
+nnpipe = { git = "https://github.com/13theye/nnpipe", branch = "main" }
 
 [lib]
-name = "tacit_gameover"
+name = "gameover2025"
 path = "src/lib.rs"
 
 [[bin]]
-name = "tacit-gameover"
+name = "gameover2025"
 path = "src/main.rs"
