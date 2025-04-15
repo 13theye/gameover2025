@@ -274,7 +274,7 @@ impl BoardInstance {
                     }
 
                     if let Some(rows) = self.rows_to_clear.take() {
-                        self.score_rows(rows.len());
+                        self.score_row_clear(rows.len());
                         self.clear_rows(&rows)
                     }
 
@@ -357,7 +357,7 @@ impl BoardInstance {
     // Player-induced drop down to lowest legal position
     fn hard_drop(&mut self) {
         //Calculate a valid drop position
-        if let Some((drop_pos, result)) = self.get_drop_location() {
+        if let Some((drop_pos, result)) = self.get_drop_position() {
             if DEBUG {
                 println!("Drop location y is {:?}", drop_pos);
             }
@@ -446,7 +446,7 @@ impl BoardInstance {
     }
 
     // Obtain the valid hard drop position of the currently active piece
-    fn get_drop_location(&mut self) -> Option<(BoardPosition, PlaceResult)> {
+    fn get_drop_position(&mut self) -> Option<(BoardPosition, PlaceResult)> {
         self.active_piece
             .as_ref()
             .map(|piece| self.board.calculate_drop(piece))
@@ -481,7 +481,7 @@ impl BoardInstance {
         }
     }
 
-    fn score_rows(&mut self, number_of_rows: usize) {
+    fn score_row_clear(&mut self, number_of_rows: usize) {
         self.board.score_cleared_rows(number_of_rows);
     }
 
@@ -696,9 +696,9 @@ impl BoardInstance {
         let center_y = bottom_bound + (top_bound - bottom_bound) / 2.0;
         let half_max_distance = (top_bound - bottom_bound) / 2.0;
         let half_separation = if top_row == bottom_row {
-            self.cell_size / 2.0 * progress.powf(1.2)
+            self.cell_size / 2.0 * progress
         } else {
-            half_max_distance * progress.powf(1.2)
+            half_max_distance * progress
         };
 
         // Line positions
@@ -738,7 +738,8 @@ impl BoardInstance {
                 vec2(board_left_edge, line_pos),
                 vec2(board_left_edge + board_width, line_pos),
             )
-            .color(rgba(1.0, 0.91, 0.65, 0.55))
+            //.color(rgba(1.0, 0.91, 0.65, 0.55))
+            .color(rgba(1.0, 0.8, 0.8, 0.65))
             .stroke_weight(3.0);
     }
 

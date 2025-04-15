@@ -5,7 +5,7 @@
 
 use crate::views::{BoardPosition, PieceInstance, RotationDirection};
 
-const DEBUG: bool = false;
+const DEBUG: bool = true;
 
 #[derive(PartialEq)]
 pub enum PlaceResult {

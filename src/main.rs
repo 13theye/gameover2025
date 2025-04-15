@@ -208,7 +208,20 @@ fn key_pressed(app: &App, model: &mut Model, key: Key) {
         Key::Key2 => model.player_input = Some(PlayerInput::ResumeState),
 
         Key::G => {
-            model.make_board("board", vec2(-300.0, 0.0));
+            model.make_board(
+                "board1",
+                vec2(
+                    (model.board_config.width as f32 * model.board_config.cell_size / -2.0) - 100.0,
+                    0.0,
+                ),
+            );
+            model.make_board(
+                "board2",
+                vec2(
+                    (model.board_config.width as f32 * model.board_config.cell_size / 2.0) + 100.0,
+                    0.0,
+                ),
+            );
         }
         Key::P => {
             model.verbose = !model.verbose;
